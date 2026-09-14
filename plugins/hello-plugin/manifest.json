@@ -1,0 +1,14 @@
+{
+  "name": "hello-plugin",
+  "version": "0.1.0",
+  "description": "示例技能：演示本仓库插件格式。",
+  "author": "你",
+  "type": "skill",
+  "whenToUse": "当用户想测试插件仓库是否正常工作。",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  },
+  "keywords": ["示例", "demo"],
+  "scripts": {}
+}

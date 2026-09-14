@@ -1,0 +1,10 @@
+# The dsh-plugin-repo-manager bundle patch: mounts the plugin's
+# server half as one Cordis loader row. The same entry is also the browser
+# roster row (the plugin declares dsh.client), so the client half is discovered
+# from it by the client-modules node half.
+
+- insert:
+    - id: plugin-repo
+      name: 'dsh-plugin-repo-manager'
+      config:
+        repoDir: '/vol1/1000/AI/DSHPlugin/plugins'

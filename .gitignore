@@ -1,0 +1,10 @@
+# 忽略生成的清单与临时文件
+registry/manifest.json
+*.tmp
+.DS_Store
+
+# 忽略临时目录（中间态/过期文件，仅供参考）
+temp/
+
+# 可选：忽略已装到 DSH 的镜像，避免把技能副本提交进 git
+# dsh-mirror/
