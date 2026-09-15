@@ -10,6 +10,10 @@
   - 安装/卸载管理
   - 自定义轮询刷新（默认 3 秒）
   - 批量操作支持
+- **[lucky-api](plugins/lucky-api/)** - 技能型插件：调用自建 Lucky 实例的 HTTP API
+  - 零依赖（Python stdlib），`check / get / post / put` 统一入口
+  - 鉴权走 `Lucky-Admin-Token`，成败判 `ret` 而非 HTTP 状态码
+  - 附 273 个接口清单，可一键重抓前端刷新
 
 ## 🚀 快速开始
 
@@ -39,6 +43,7 @@ dsh --profile web &
 DSHPlugin/
 ├── plugins/
 │   ├── dsh-plugin-repo-manager/    # 主插件（可插拔）
+│   ├── lucky-api/                  # 技能型插件：Lucky 实例 API 调用
 │   └── hello-plugin/               # 示例插件
 ├── docs/                           # 文档
 │   ├── architecture.md             # 架构说明

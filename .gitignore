@@ -6,5 +6,8 @@ registry/manifest.json
 # 忽略临时目录（中间态/过期文件，仅供参考）
 temp/
 
+# 忽略 WorkBuddy 本地工作目录（助手记忆/会话数据，不入库）
+.workbuddy/
+
 # 可选：忽略已装到 DSH 的镜像，避免把技能副本提交进 git
 # dsh-mirror/

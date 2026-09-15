@@ -1,0 +1,14 @@
+{
+  "name": "lucky-api",
+  "version": "1.0.0",
+  "description": "调用自建 Lucky 实例（lucky.stun.abcc.qzz.io:48020）的 HTTP API：查状态、查模块配置、读日志，并可按需重抓前端刷新接口清单。",
+  "author": "abczhou",
+  "type": "skill",
+  "whenToUse": "当需要查询/更新 Lucky（STUN 穿透、DDNS、端口转发、反代 Web 服务等）的配置或状态，或在自动化里定时调用 Lucky 接口取数/更新数据时。",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  },
+  "keywords": ["lucky", "stun", "ddns", "portforward", "reverse-proxy", "api"],
+  "scripts": {}
+}
