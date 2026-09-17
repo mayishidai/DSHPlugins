@@ -65,9 +65,60 @@ DSH 的 skill 提供方会自动发现新目录并刷新目录，通常无需重
 
 ## 4. 版本与升级
 
-- 仓库里每个插件的 `manifest.json` 声明 `version`。
-- `install-plugin.sh --force` 会覆盖旧版本，并把旧 `version.json` 存为 `previous_version`。
-- `sync-to-dsh.sh` 批量同步：已装则更新、未装则安装。
+### 4.1 版本号来源
+
+插件版本由 `getPluginVersion()` 按序解析，取第一个命中：
+
+| 顺序 | 文件 | 说明 |
+|------|------|------|
+| 1 | `<插件>/manifest.json` 的 `version` | skill / agent / mcp / runtime 通用 |
+| 2 | `<插件>/package.json` 的 `version` | 面板型（npm 包）没有 manifest 时的兜底 |
+| 3 | `<插件>/version.json` 的 `version` | 已安装留档 |
+
+**已安装版本**只从 `skillsDir/<name>/version.json` 读取——该文件在安装/更新时写入。
+
+### 4.2 更新判定
+
+```ts
+isNewer(latest: string | null, current: string | null): boolean
+```
+
+逐段数字比较语义化版本，规则：
+
+- 任一侧缺失 → `false`（不确定就不提示更新）
+- 任一侧含非数字段（如 `abc`）→ `false`（**防止误报「可更新」导致反复覆盖**）
+- 支持 `v` 前缀（`v1.2.3`）；预发布后缀按主版本比较（`1.1.0-alpha` → `1.1.0`）
+- 段位数不齐按 0 补齐（`1.0` 等价 `1.0.0`）
+
+`listPlugins()` 为每个仓库插件返回 `hasUpdate = installed && isNewer(repoVersion, installedVersion)`。
+
+### 4.3 更新流程（`installPlugin`）
+
+1. 读旧 `version.json` 得 `fromVersion`，判定本次是**安装**还是**更新**
+2. 更新前把整个已装目录备份为 `<targetDir>.bak-<ISO时间戳>`
+3. 清空旧目录（避免上游已删除的文件在更新后残留）
+4. 递归复制新内容，用 `statSync` 判断是否为目录（**空目录也能正确复制**）
+5. 写 `version.json`：保留原 `installedAt`，刷新 `version`、新增/更新 `updatedAt`、`previousVersion`、`backupDir`
+
+### 4.4 `version.json` 字段
+
+```json
+{
+  "name": "lucky-api",
+  "version": "1.1.0",
+  "installedAt": "2026-09-17T12:00:00.000Z",
+  "updatedAt": "2026-09-18T09:30:00.000Z",
+  "previousVersion": "1.0.0",
+  "backupDir": "/path/to/skills/lucky-api.bak-2026-09-18T09-30-00-000Z"
+}
+```
+
+### 4.5 批量同步
+
+`sync-to-dsh.sh` 批量同步：已装则更新、未装则安装。
+
+> 校验 `isNewer` 逻辑改动后，务必跑 `panels/dsh-plugin-repo-manager/scripts/test-isnewer.mjs`（23 例边界用例）。
+
 
 ## 5. 清单（manifest.json）的两种用途
 

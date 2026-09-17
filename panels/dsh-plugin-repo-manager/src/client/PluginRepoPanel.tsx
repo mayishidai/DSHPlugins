@@ -8,7 +8,22 @@ export interface RepoPlugin {
   version: string | null
   installed: boolean
   installedVersion: string | null
+  /** 仓库版本比已装版本新（后端算好的） */
+  hasUpdate?: boolean
   source: 'repo'
+}
+
+/** 安装/更新接口的返回 */
+export interface InstallResult {
+  ok: boolean
+  name?: string
+  installed?: boolean
+  updated?: boolean
+  from?: string | null
+  to?: string | null
+  /** 更新前的整目录备份位置（仅在更新时存在） */
+  backupDir?: string | null
+  error?: { code: string; message: string; details?: string }
 }
 
 export interface PluginRepoPanelProps {
@@ -45,10 +60,11 @@ export function PluginRepoPanel({
   const [error, setError] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [showConfirm, setShowConfirm] = useState<{ type: 'install' | 'uninstall'; name: string } | null>(null)
+  const [showConfirm, setShowConfirm] = useState<{ type: 'install' | 'uninstall' | 'update'; name: string } | null>(null)
   const [pollInterval, setPollInterval] = useState(initialPollInterval)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const [showSettings, setShowSettings] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   // 加载插件列表
   const loadPlugins = useCallback(async () => {
@@ -85,8 +101,8 @@ export function PluginRepoPanel({
     return () => clearInterval(timer)
   }, [pollInterval, loadPlugins])
 
-  // 处理安装
-  const handleInstall = async (name: string) => {
+  // 处理安装 / 更新（同一个接口，后端按已装情况决定是否留档备份）
+  const handleInstall = async (name: string, opts?: { silent?: boolean }) => {
     setActionLoading(name)
     setShowConfirm(null)
     try {
@@ -95,16 +111,44 @@ export function PluginRepoPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       })
-      const data: ApiResponse<null> = await response.json()
+      const data: InstallResult = await response.json()
       if (data.ok) {
+        if (data.updated) {
+          const backup = data.backupDir ? `，旧版已备份至 ${data.backupDir}` : ''
+          setNotice(`已更新 ${name}：${data.from ?? '?'} → ${data.to ?? '?'}${backup}`)
+        } else if (!opts?.silent) {
+          setNotice(`已安装 ${name}${data.to ? ` (${data.to})` : ''}`)
+        }
         await loadPlugins()
       } else {
         setError(data.error?.message || '安装失败')
       }
+      return data
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error')
+      return null
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  /** 一键更新所有有新版可用的插件（串行，逐个报告结果） */
+  const handleUpdateAll = async () => {
+    const targets = plugins.filter(p => p.installed && p.hasUpdate).map(p => p.name)
+    if (targets.length === 0) return
+    const succeeded: string[] = []
+    const failed: string[] = []
+    for (const name of targets) {
+      // silent: 逐个结果由本函数统一汇总，避免中间态文案闪烁
+      const r = await handleInstall(name, { silent: true })
+      if (r?.ok) succeeded.push(name)
+      else failed.push(name)
+    }
+    await loadPlugins()
+    if (failed.length === 0) {
+      setNotice(`全部更新完成（${succeeded.length} 个）`)
+    } else {
+      setError(`更新失败 ${failed.length} 个：${failed.join('、')}（成功 ${succeeded.length} 个）`)
     }
   }
 
@@ -209,6 +253,14 @@ export function PluginRepoPanel({
           </span>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {plugins.some(p => p.installed && p.hasUpdate) && (
+            <button
+              onClick={handleUpdateAll}
+              style={{ ...styles.button, background: 'var(--dsw-alias-state-warning-bg, #fff7e6)', color: 'var(--dsw-alias-state-warning-primary, #b26b00)' }}
+            >
+              ⬆ 全部更新 ({plugins.filter(p => p.installed && p.hasUpdate).length})
+            </button>
+          )}
           {selected.size > 0 && (
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
@@ -233,6 +285,19 @@ export function PluginRepoPanel({
           </button>
         </div>
       </div>
+
+      {/* 操作结果提示 */}
+      {notice && (
+        <div style={{
+          marginBottom: '12px', padding: '8px 12px', borderRadius: '6px',
+          fontSize: '12px', background: 'var(--dsw-alias-state-success-bg)',
+          color: 'var(--dsw-alias-state-success-primary)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <span>{notice}</span>
+          <button onClick={() => setNotice(null)} style={{ ...styles.smallButton }}>关闭</button>
+        </div>
+      )}
 
       {/* 设置面板 */}
       {showSettings && (
@@ -319,6 +384,16 @@ export function PluginRepoPanel({
                   {plugin.installed && plugin.installedVersion && plugin.installedVersion !== plugin.version && (
                     <div style={{ fontSize: '11px' }}>已装: {plugin.installedVersion}</div>
                   )}
+                  {plugin.installed && plugin.hasUpdate && (
+                    <div style={{
+                      display: 'inline-block', marginTop: '4px', padding: '1px 6px',
+                      borderRadius: '8px', fontSize: '11px',
+                      background: 'var(--dsw-alias-state-warning-bg, #fff7e6)',
+                      color: 'var(--dsw-alias-state-warning-primary, #b26b00)',
+                    }}>
+                      可更新
+                    </div>
+                  )}
                 </td>
                 <td style={{ padding: '12px 8px', textAlign: 'center' }}>
                   {plugin.installed ? (
@@ -327,10 +402,14 @@ export function PluginRepoPanel({
                       padding: '2px 8px',
                       borderRadius: '12px',
                       fontSize: '12px',
-                      background: 'var(--dsw-alias-state-success-bg)',
-                      color: 'var(--dsw-alias-state-success-primary)',
+                      background: plugin.hasUpdate
+                        ? 'var(--dsw-alias-state-warning-bg, #fff7e6)'
+                        : 'var(--dsw-alias-state-success-bg)',
+                      color: plugin.hasUpdate
+                        ? 'var(--dsw-alias-state-warning-primary, #b26b00)'
+                        : 'var(--dsw-alias-state-success-primary)',
                     }}>
-                      已安装
+                      {plugin.hasUpdate ? '可更新' : '已安装'}
                     </span>
                   ) : (
                     <span style={{ color: 'var(--dsw-alias-label-tertiary)' }}>未安装</span>
@@ -347,12 +426,26 @@ export function PluginRepoPanel({
                   ) : actionLoading === plugin.name ? (
                     <span style={{ color: 'var(--dsw-alias-label-tertiary)' }}>处理中...</span>
                   ) : plugin.installed ? (
-                    <button
-                      onClick={() => setShowConfirm({ type: 'uninstall', name: plugin.name })}
-                      style={{ ...styles.button, background: 'var(--dsw-alias-state-error-bg)', color: 'var(--dsw-alias-state-error-primary)' }}
-                    >
-                      卸载
-                    </button>
+                    <>
+                      {plugin.hasUpdate && (
+                        <button
+                          onClick={() => setShowConfirm({ type: 'update', name: plugin.name })}
+                          style={{
+                            ...styles.button, marginRight: '4px',
+                            background: 'var(--dsw-alias-state-warning-bg, #fff7e6)',
+                            color: 'var(--dsw-alias-state-warning-primary, #b26b00)',
+                          }}
+                        >
+                          更新
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowConfirm({ type: 'uninstall', name: plugin.name })}
+                        style={{ ...styles.button, background: 'var(--dsw-alias-state-error-bg)', color: 'var(--dsw-alias-state-error-primary)' }}
+                      >
+                        卸载
+                      </button>
+                    </>
                   ) : null}
                 </td>
               </tr>
@@ -370,12 +463,15 @@ export function PluginRepoPanel({
         }}>
           <div style={{ background: 'var(--dsw-alias-bg-layer-3)', padding: '24px', borderRadius: '12px', maxWidth: '400px', width: '90%' }}>
             <h3 style={{ margin: '0 0 16px' }}>
-              {showConfirm.type === 'uninstall' ? '确认卸载' : '确认安装'}
+              {showConfirm.type === 'uninstall' ? '确认卸载'
+                : showConfirm.type === 'update' ? '确认更新' : '确认安装'}
             </h3>
             <p style={{ margin: '0 0 24px' }}>
               {showConfirm.type === 'uninstall'
                 ? `确定要卸载 "${showConfirm.name}" 吗？此操作不可撤销。`
-                : `确定要安装 "${showConfirm.name}" 吗？将从仓库复制到 skills 目录。`}
+                : showConfirm.type === 'update'
+                  ? `确定要更新 "${showConfirm.name}" 吗？将用仓库中的新版本覆盖已装版本，旧版本会留档备份（记录在 version.json 的 previousVersion / backupDir）。`
+                  : `确定要安装 "${showConfirm.name}" 吗？将从仓库复制到 skills 目录。`}
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowConfirm(null)} style={styles.button}>取消</button>

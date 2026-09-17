@@ -1,0 +1,19 @@
+{
+  "name": "dsh-plugin-repo-manager",
+  "version": "1.1.0",
+  "description": "DSH web 面板插件：在设置页管理自建插件仓库，支持扫描、安装、卸载、版本检测与一键更新（更新前自动留档备份）。",
+  "author": "abczhou",
+  "type": "runtime",
+  "whenToUse": "当需要在 DSH 设置面板中浏览/安装/更新自建插件仓库（DSHPlugins）里的插件时。",
+  "invocation": {
+    "modelInvocable": false,
+    "userInvocable": true
+  },
+  "keywords": ["dsh", "plugin-repo", "settings-panel", "cordis", "update"],
+  "entry": {
+    "server": "src/index.ts",
+    "client": "client/client.js",
+    "patch": "cordis.patch.yml"
+  },
+  "scripts": {}
+}

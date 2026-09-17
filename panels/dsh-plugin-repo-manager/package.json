@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-repo-manager",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "DSH web plugin: manage custom plugin repository from settings panel",
   "type": "module",
   "license": "MIT",

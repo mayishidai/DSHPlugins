@@ -2,6 +2,9 @@
 name: hello-plugin
 description: "示例技能：演示本仓库插件格式。调用后返回一句问候。"
 whenToUse: "当用户想测试插件仓库是否正常工作，或问怎么加新插件时。"
+invocation:
+  modelInvocable: true
+  userInvocable: true
 ---
 
 # hello-plugin（示例技能）

@@ -84,6 +84,7 @@ const bundleCode = `window.__ModuleLoader__.load({
       var _s6 = React.useState(initialPollInterval), pollInterval = _s6[0], setPollInterval = _s6[1];
       var _s7 = React.useState(false), showSettings = _s7[0], setShowSettings = _s7[1];
       var _s8 = React.useState(new Date()), lastUpdate = _s8[0];
+      var _s9 = React.useState(null), notice = _s9[0], setNotice = _s9[1];
 
       function load() {
         setLoading(true); setError(null);
@@ -104,13 +105,46 @@ const bundleCode = `window.__ModuleLoader__.load({
         return function() { clearInterval(t); };
       }, [pollInterval]);
 
-      function install(name) {
+      // 安装 / 更新共用同一接口；后端按已装情况决定是否留档备份
+      function install(name, silent) {
         setActionLoading(name); setConfirm(null);
-        fetch(apiBase + '/install', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name}) })
+        return fetch(apiBase + '/install', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name}) })
           .then(function(r) { return r.json(); })
-          .then(function(d) { if (d.ok) load(); else setError(d.error && d.error.message); })
-          .catch(function(e) { setError(e && e.message); })
+          .then(function(d) {
+            if (d.ok) {
+              if (d.updated) {
+                var backup = d.backupDir ? '，旧版已备份至 ' + d.backupDir : '';
+                setNotice('已更新 ' + name + '：' + (d.from || '?') + ' → ' + (d.to || '?') + backup);
+              } else if (!silent) {
+                setNotice('已安装 ' + name + (d.to ? ' (' + d.to + ')' : ''));
+              }
+              return load().then(function() { return d; });
+            }
+            setError(d.error && d.error.message);
+            return d;
+          })
+          .catch(function(e) { setError(e && e.message); return null; })
           .finally(function() { setActionLoading(null); });
+      }
+
+      // 一键更新所有「可更新」的插件（串行，逐个汇总结果）
+      function updateAll() {
+        var targets = plugins.filter(function(p) { return p.installed && p.hasUpdate; }).map(function(p) { return p.name; });
+        if (!targets.length) return;
+        var succeeded = [], failed = [];
+        var chain = Promise.resolve();
+        targets.forEach(function(n) {
+          chain = chain.then(function() {
+            return install(n, true).then(function(r) {
+              if (r && r.ok) succeeded.push(n); else failed.push(n);
+            });
+          });
+        });
+        return chain.then(function() { return load(); })
+          .then(function() {
+            if (!failed.length) setNotice('全部更新完成（' + succeeded.length + ' 个）');
+            else setError('更新失败 ' + failed.length + ' 个：' + failed.join('、') + '（成功 ' + succeeded.length + ' 个）');
+          });
       }
 
       function uninstall(name) {
@@ -139,12 +173,17 @@ const bundleCode = `window.__ModuleLoader__.load({
             jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)',fontSize:'12px'}}, 'Updated: ' + lastUpdate.toLocaleTimeString())
           ),
           jsxRuntime.jsx('div', { style: {display:'flex',gap:'8px',alignItems:'center'} },
+            plugins.some(function(p){return p.installed && p.hasUpdate;}) && jsxRuntime.jsx('button', {onClick:updateAll,style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)',cursor:'pointer'}}, '⬆ Update All (' + plugins.filter(function(p){return p.installed && p.hasUpdate;}).length + ')'),
             selected.size > 0 && jsxRuntime.jsx('div', {style:{display:'flex',gap:'8px'}},
               jsxRuntime.jsx('button', {onClick:function(){for(var n of selected) install(n); setSelected(new Set());},style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-success-bg)',color:'var(--dsw-alias-state-success-primary)',cursor:'pointer'}}, 'Install ('+selected.size+')'),
               jsxRuntime.jsx('button', {onClick:function(){for(var n of selected) uninstall(n); setSelected(new Set());},style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-error-bg)',color:'var(--dsw-alias-state-error-primary)',cursor:'pointer'}}, 'Uninstall ('+selected.size+')')
             ),
             jsxRuntime.jsx('button', {onClick:function(){setShowSettings(!showSettings);},style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer'}}, '⚙ Settings')
           )
+        ),
+        notice && jsxRuntime.jsx('div', {style:{marginBottom:'12px',padding:'8px 12px',borderRadius:'6px',fontSize:'12px',background:'var(--dsw-alias-state-success-bg)',color:'var(--dsw-alias-state-success-primary)',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+          jsxRuntime.jsx('span', null, notice),
+          jsxRuntime.jsx('button', {onClick:function(){setNotice(null);},style:{padding:'2px 8px',borderRadius:'4px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'12px'}}, 'Close')
         ),
         showSettings && jsxRuntime.jsx('div', {style:{marginBottom:'16px',padding:'16px',background:'var(--dsw-alias-bg-layer-2)',borderRadius:'8px'}},
           jsxRuntime.jsx('h3', {style:{margin:'0 0 12px'}}, zh.settings),
@@ -173,14 +212,27 @@ const bundleCode = `window.__ModuleLoader__.load({
             return jsxRuntime.jsx('tr', {key:plugin.name,style:{borderBottom:'1px solid var(--dsw-alias-border-l3)'}},
               jsxRuntime.jsx('td', {style:{padding:'12px 8px',textAlign:'center'}}, jsxRuntime.jsx('input', {type:'checkbox',checked:selected.has(plugin.name),onChange:function(){toggle(plugin.name);}})),
               jsxRuntime.jsx('td', {style:{padding:'12px 8px'}}, jsxRuntime.jsx('div', {style:{fontWeight:500}}, plugin.name)),
-              jsxRuntime.jsx('td', {style:{padding:'12px 8px',color:'var(--dsw-alias-label-tertiary)'}, children: plugin.version || '—'}),
+              jsxRuntime.jsx('td', {style:{padding:'12px 8px',color:'var(--dsw-alias-label-tertiary)'}},
+                plugin.version || '—',
+                plugin.installed && plugin.installedVersion && plugin.installedVersion !== plugin.version && jsxRuntime.jsx('div', {style:{fontSize:'11px'}}, 'Installed: ' + plugin.installedVersion),
+                plugin.installed && plugin.hasUpdate && jsxRuntime.jsx('div', {style:{display:'inline-block',marginTop:'4px',padding:'1px 6px',borderRadius:'8px',fontSize:'11px',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)'}}, 'Update available')
+              ),
               jsxRuntime.jsx('td', {style:{padding:'12px 8px',textAlign:'center'}},
-                plugin.installed ? jsxRuntime.jsx('span', {style:{display:'inline-block',padding:'2px 8px',borderRadius:'12px',fontSize:'12px',background:'var(--dsw-alias-state-success-bg)',color:'var(--dsw-alias-state-success-primary)'}, children: zh.installed}) : jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)'}, children: zh.notInstalled})
+                plugin.installed
+                  ? jsxRuntime.jsx('span', {style:{
+                      display:'inline-block',padding:'2px 8px',borderRadius:'12px',fontSize:'12px',
+                      background: plugin.hasUpdate ? 'var(--dsw-alias-state-warning-bg, #fff7e6)' : 'var(--dsw-alias-state-success-bg)',
+                      color: plugin.hasUpdate ? 'var(--dsw-alias-state-warning-primary, #b26b00)' : 'var(--dsw-alias-state-success-primary)'
+                    }, children: plugin.hasUpdate ? 'Update available' : zh.installed})
+                  : jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)'}, children: zh.notInstalled})
               ),
               jsxRuntime.jsx('td', {style:{padding:'12px 8px',textAlign:'right'}},
                 !plugin.installed && !actionLoading ? jsxRuntime.jsx('button', {onClick:function(){setConfirm({type:'install',name:plugin.name});},style:{padding:'4px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer'}}, zh.install)
                 : actionLoading === plugin.name ? jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)'}, children: zh.installing})
-                : plugin.installed ? jsxRuntime.jsx('button', {onClick:function(){setConfirm({type:'uninstall',name:plugin.name});},style:{padding:'4px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-error-bg)',color:'var(--dsw-alias-state-error-primary)',cursor:'pointer'}}, zh.uninstall) : null
+                : plugin.installed ? [
+                    plugin.hasUpdate && jsxRuntime.jsx('button', {key:'u', onClick:function(){setConfirm({type:'update',name:plugin.name});},style:{padding:'4px 12px',marginRight:'4px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)',cursor:'pointer'}}, 'Update'),
+                    jsxRuntime.jsx('button', {key:'d', onClick:function(){setConfirm({type:'uninstall',name:plugin.name});},style:{padding:'4px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-error-bg)',color:'var(--dsw-alias-state-error-primary)',cursor:'pointer'}}, zh.uninstall)
+                  ] : null
               )
             );
           }))

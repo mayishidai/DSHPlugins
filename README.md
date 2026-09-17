@@ -96,10 +96,35 @@ DSHPlugin/
 | 侧边栏按钮 | ✅ | 注册到 sidebar 槽 |
 | Skill 列表 | ✅ | 从仓库目录读取 |
 | 安装/卸载 | ✅ | 带确认对话框 |
+| 版本检测 | ✅ | 仓库版本 vs 已装版本，标出「可更新」 |
+| 一键更新 | ✅ | 单个更新 / 「⬆ 全部更新」批量串行 |
+| 更新留档 | ✅ | 更新前整目录备份 + 记录 `previousVersion`/`backupDir` |
 | 批量操作 | ✅ | 勾选多个插件 |
 | 轮询刷新 | ✅ | 默认 3 秒，可自定义 |
 | 安全守卫 | ✅ | kebab-case + 路径穿越防护 |
 | 多语言 | ✅ | 中文/英文 |
+
+## 🔄 版本与更新机制
+
+**版本号解析顺序**（取第一个命中）：
+
+| 顺序 | 文件 | 适用类型 |
+|------|------|----------|
+| 1 | `manifest.json` 的 `version` | skill / agent / mcp / runtime |
+| 2 | `package.json` 的 `version` | 面板型（npm 包） |
+| 3 | `version.json` 的 `version` | 已安装留档兜底 |
+
+**更新判定**：`isNewer(latest, current)` 逐段数字比较语义化版本。
+
+- 版本号缺失或无法解析（含非数字段）→ **不提示更新**，避免误报
+- 支持 `v` 前缀与预发布后缀（`1.1.0-alpha` 按 `1.1.0` 比较）
+- 段位数不齐按 0 补齐（`1.0` 等价 `1.0.0`）
+- 用例见 `panels/dsh-plugin-repo-manager/scripts/test-isnewer.mjs`（23 例，全通过）
+
+**更新流程**：读旧版本 → 判定安装/更新 → **整目录备份** `<name>.bak-<ISO时间戳>` → 清空旧目录（防残留）→ 递归复制（`statSync` 判目录，空目录也能复制）→ 写 `version.json`（保留 `installedAt`，刷新 `version`/`updatedAt`/`previousVersion`/`backupDir`）。
+
+> 面板插件自身的版本号写在 `panels/dsh-plugin-repo-manager/manifest.json`（当前 `1.1.0`），与 `package.json` 保持一致。
+
 
 ## ⚙️ 配置
 
@@ -134,17 +159,19 @@ export DSH_PLUGIN_POLL_INTERVAL=3000
 
 1. WebSocket 实时推送
 2. 插件搜索功能
-3. 版本历史管理
+3. 版本回滚（基于已留档的 `.bak-<时间戳>` 备份）
 4. GitHub 直接安装
-5. 自动更新检测
+5. 批量卸载
 
 ## 📝 HTTP API
 
 ```
-GET  /api/plugin-repo/list      # 列出所有插件
-POST /api/plugin-repo/install   # 安装插件
+GET  /api/plugin-repo/list      # 列出所有插件（含 hasUpdate 标识）
+POST /api/plugin-repo/install   # 安装插件（已装则走更新：备份 + 留档）
 POST /api/plugin-repo/uninstall # 卸载插件
 ```
+
+> `/install` 对已安装插件自动转为**更新**语义，返回体含 `updated: true` 与 `backupDir`。
 
 ## 📖 相关文档
 
