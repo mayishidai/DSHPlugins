@@ -8,7 +8,7 @@
 
 | 目录 | 放什么 | 当前收录 |
 |---|---|---|
-| [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/) |
+| [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/)、[Cloudflare 官方技能 14 个](docs/upstream/cloudflare-skills/) |
 | [`agents/`](agents/) | **智能体 / 专家包**（角色定义，非能力） | _暂无_ |
 | [`mcps/`](mcps/) | **MCP 服务配置**（配置片段 + 启动脚本，不含凭据） | _暂无_ |
 | [`panels/`](panels/) | **运行时面板插件**（DSH extensions 双半包，带 UI） | [dsh-plugin-repo-manager](panels/dsh-plugin-repo-manager/) |
@@ -21,8 +21,11 @@
   - 零依赖（Python stdlib），`check / get / post / put` 统一入口
   - 鉴权走 `Lucky-Admin-Token`，成败判 `ret` 而非 HTTP 状态码
   - 附 273 个接口清单，可一键重抓前端刷新
+- **Cloudflare 官方技能**（技能 × 14） - 来自 [cloudflare/skills](https://github.com/cloudflare/skills)，Apache-2.0
+  - 路由层 `cloudflare`（含 52 个产品参考包）+ Workers / Durable Objects / Agents SDK / Wrangler 等
+  - **原样引入，未做任何改写**，便于随上游更新；许可证与上游 README 存于 [`docs/upstream/cloudflare-skills/`](docs/upstream/cloudflare-skills/)
 
-> 三类内容的格式约定、校验方式、安装落点各见其目录下的 `README.md`。
+> 各类内容的格式约定、校验方式、安装落点各见其目录下的 `README.md`。
 
 ## 🚀 快速开始
 
@@ -94,6 +97,12 @@ DSHPlugins/
 ├── skills/                         # 技能型插件（SKILL.md，DSH 扫描发现）
 │   ├── lucky-api/                  #   Lucky 实例 API 调用（零依赖客户端 + 接口清单）
 │   ├── hello-plugin/               #   示例技能
+│   ├── cloudflare/                 #  ┐
+│   ├── wrangler/                   #  │
+│   ├── workers-best-practices/     #  │  Cloudflare 官方技能（14 个）
+│   ├── durable-objects/            #  │  来自 cloudflare/skills，Apache-2.0
+│   ├── agents-sdk/                 #  │  原样引入，未改写
+│   ├── sandbox-next/ ...           #  ┘
 │   └── README.md
 ├── agents/                         # 智能体 / 专家包（暂无）
 │   └── README.md
@@ -112,7 +121,9 @@ DSHPlugins/
 │   ├── architecture.md             #   架构说明
 │   ├── FAQ.md                      #   常见问题
 │   ├── development-runbook.md      #   开发指南
-│   └── how-to-add-a-plugin.md      #   新增插件指南
+│   ├── how-to-add-a-plugin.md      #   新增插件指南
+│   └── upstream/                   #   第三方资产溯源
+│       └── cloudflare-skills/      #     Cloudflare 技能的上游 LICENSE + README
 ├── scripts/
 │   ├── preflight.sh                #   安装前自检（只读）
 │   ├── validate_repo.py            #   结构/契约校验（零依赖）

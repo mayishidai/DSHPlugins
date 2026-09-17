@@ -1,0 +1,14 @@
+{
+  "name": "turnstile-spin",
+  "version": "1.0.0",
+  "description": "Set up, repair, or migrate to Cloudflare Turnstile bot verification in an existing frontend and backend, including server-side Siteverify.",
+  "author": "Cloudflare",
+  "type": "skill",
+  "source": "https://github.com/cloudflare/skills",
+  "license": "Apache-2.0",
+  "whenToUse": "Set up, repair, or migrate to Cloudflare Turnstile bot verification in an existing frontend and backend, including server-side Siteverify.",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  }
+}

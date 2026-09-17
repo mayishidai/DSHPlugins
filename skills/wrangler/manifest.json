@@ -1,0 +1,14 @@
+{
+  "name": "wrangler",
+  "version": "1.0.0",
+  "description": "Run or troubleshoot Wrangler CLI commands and configure Worker projects for local development, deployment, and Cloudflare resource management.",
+  "author": "Cloudflare",
+  "type": "skill",
+  "source": "https://github.com/cloudflare/skills",
+  "license": "Apache-2.0",
+  "whenToUse": "Run or troubleshoot Wrangler CLI commands and configure Worker projects for local development, deployment, and Cloudflare resource management.",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  }
+}

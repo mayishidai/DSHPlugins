@@ -1,0 +1,14 @@
+{
+  "name": "cloudflare-one",
+  "version": "1.0.0",
+  "description": "Design, configure, troubleshoot, or review Cloudflare One Zero Trust and SASE deployments. Use cloudflare-one-migrations for migration planning from other vendors.",
+  "author": "Cloudflare",
+  "type": "skill",
+  "source": "https://github.com/cloudflare/skills",
+  "license": "Apache-2.0",
+  "whenToUse": "Design, configure, troubleshoot, or review Cloudflare One Zero Trust and SASE deployments. Use cloudflare-one-migrations for migration planning from other vendors.",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  }
+}

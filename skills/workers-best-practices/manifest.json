@@ -1,0 +1,14 @@
+{
+  "name": "workers-best-practices",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers best practices for production applications. Use when writing, reviewing, or configuring Workers.",
+  "author": "Cloudflare",
+  "type": "skill",
+  "source": "https://github.com/cloudflare/skills",
+  "license": "Apache-2.0",
+  "whenToUse": "Cloudflare Workers best practices for production applications. Use when writing, reviewing, or configuring Workers.",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  }
+}

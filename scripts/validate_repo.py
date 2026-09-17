@@ -199,9 +199,33 @@ def check_install_scripts(repo: Path) -> None:
             ok(f"{sh.name}: 未见原位改写")
 
 
+PLACEHOLDER = re.compile(
+    r"your[-_]|_here$|-here$|xxx|<[a-z_-]+>|\$\{?[A-Z_]+\}?|example|placeholder|"
+    r"changeme|redacted|dummy|fake|test-|sample",
+    re.IGNORECASE,
+)
+
+
 def check_credentials(repo: Path) -> None:
+    """粗筛明文凭据。
+
+    注意：文档类仓库（如 skills/*/references/）里必然出现**占位示例**，
+    例如 `export CLOUDFLARE_API_TOKEN="your_token_here"`、反面教材
+    `const secret = 'your-turn-key-secret'`、以及 `$VAR` 变量引用。
+    这些不是凭据，必须排除，否则校验永远失败、失去信号价值。
+
+    判定为「占位/示例」的情形（任一命中即跳过）：
+      - 值里含 your- / your_ / _here / xxx / <placeholder> / ${VAR}
+      - 值里含 example / placeholder / changeme / redacted / dummy / fake / test- / sample
+      - 值本身是 shell 变量引用或含 shell 语法（$ / 空格 / 引号）
+
+    另外：值必须看起来**像**一个密钥字面量——单一 token，无空格、无 shell 元字符。
+    否则会误伤文档里的 shell 代码片段，例如：
+      read -rsp 'Cloudflare API token: ' token; echo; export CLOUDFLARE_API_TOKEN="
+    这一行会因引号跨越而错配出 `= ' token; echo; export ...`，纯属假阳性。
+    """
     pat = re.compile(
-        r"(token|secret|password|api_?key)\s*[:=]\s*[\"'][A-Za-z0-9_\-]{16,}[\"']",
+        r"(token|secret|password|api_?key)\s*[:=]\s*[\"']([^\"'\s]{16,})[\"']",
         re.IGNORECASE,
     )
     hits = []
@@ -220,12 +244,18 @@ def check_credentials(repo: Path) -> None:
                 text = f.read_text(encoding="utf-8", errors="replace")
             except Exception:
                 continue
-            if pat.search(text):
-                hits.append(str(f.relative_to(repo)))
+            for m in pat.finditer(text):
+                value = m.group(2)
+                if value.startswith("$"):
+                    continue
+                if PLACEHOLDER.search(value):
+                    continue
+                hits.append(f"{f.relative_to(repo)} (值以 '{value[:6]}...' 开头)")
+                break
     if hits:
         bad(f"疑似明文凭据: {', '.join(hits[:5])}")
     else:
-        ok("未发现明文凭据")
+        ok("未发现明文凭据（占位示例已排除）")
 
 
 def check_plugin(plugin: Path, expected_type: str) -> None:

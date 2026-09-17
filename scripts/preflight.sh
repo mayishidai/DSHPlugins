@@ -153,12 +153,29 @@ echo ""
 
 # ---------- 5. 无凭据入库 ----------
 echo "5. 凭据粗筛"
-if grep -rInE '(token|secret|password|api_?key)\s*[:=]\s*["'"'"'][A-Za-z0-9_\-]{16,}' \
+# 与 validate_repo.py 的 check_credentials 保持同一判据：
+# 值必须是单一 token（无空格/引号），且需排除占位示例（your-xxx、${VAR}、example 等）。
+# 否则文档里必然出现的示例（如 CLOUDFLARE_API_TOKEN="your_token_here"）会持续误报。
+CRED_RE='(token|secret|password|api_?key)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"'[:space:]]{16,}["'"'"']'
+PLACEHOLDER_RE='your[-_]|_here|xxx|<[a-z_-]+>|example|placeholder|changeme|redacted|dummy|fake|test-|sample'
+cred_hits=""
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    value="$(printf '%s' "$line" | sed -E 's/.*[:=][[:space:]]*["'"'"']([^"'"'"']*)["'"'"'].*/\1/')"
+    case "$value" in
+        \$*) continue ;;
+    esac
+    printf '%s' "$value" | grep -qEi "$PLACEHOLDER_RE" && continue
+    cred_hits="$cred_hits$line"$'\n'
+done < <(grep -rInE "$CRED_RE" \
         --include='*.json' --include='*.md' --include='*.py' --include='*.ts' --include='*.sh' \
-        skills panels mcps scripts 2>/dev/null | grep -v node_modules | head -5 | grep -q .; then
+        skills panels mcps scripts 2>/dev/null | grep -v node_modules | head -20)
+
+if [ -n "$cred_hits" ]; then
     bad "疑似明文凭据命中（请人工确认）"
+    printf '%s' "$cred_hits" | head -3
 else
-    ok "未发现明文凭据"
+    ok "未发现明文凭据（占位示例已排除）"
 fi
 echo ""
 

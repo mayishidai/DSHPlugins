@@ -1,0 +1,14 @@
+{
+  "name": "web-perf",
+  "version": "1.0.0",
+  "description": "Audit, diagnose, or optimize website loading and interaction performance, Core Web Vitals, and Lighthouse performance scores.",
+  "author": "Cloudflare",
+  "type": "skill",
+  "source": "https://github.com/cloudflare/skills",
+  "license": "Apache-2.0",
+  "whenToUse": "Audit, diagnose, or optimize website loading and interaction performance, Core Web Vitals, and Lighthouse performance scores.",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  }
+}
