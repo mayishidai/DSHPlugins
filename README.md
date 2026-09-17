@@ -26,61 +26,100 @@
 
 ## 🚀 快速开始
 
-### 1. 安装面板插件
+> 设计原则：**产物已编译入库，目标机不需要 npm 或编译工具链**。
+> 你只需 `git pull` 然后按下面两种方式安装。
+
+### 安装前自检（推荐）
 
 ```bash
-cd panels/dsh-plugin-repo-manager
-bash scripts/install.sh
+bash scripts/preflight.sh              # 检查产物是否齐备、脚本是否会污染 DSH
+python3 scripts/validate_repo.py       # 结构 + 契约校验（零依赖）
 ```
 
-### 2. 重启 DSH
+两者都会在缺失编译产物、或 `main` 指向 `.ts` 时报 FAIL。
+
+### 1. 安装技能型插件（skills/）
+
+```bash
+make install NAME=lucky-api        # 单个
+make install-all                   # 全部
+```
+
+等价于把 `skills/<name>/` 复制到 `$DSH_HOME/skills/<name>/`，DSH 的 skill 提供方会自动发现，**无需重启**。
+
+### 2. 安装面板插件（panels/）
+
+```bash
+make install-panel                 # 会先编译，再装到 DSH profile
+```
+
+或直接：
+
+```bash
+bash scripts/install-to-profile.sh
+```
+
+**这个脚本只写入 DSH 的 profile 目录**（用户数据区
+`dsh-data/profiles/web`），做三件事：
+
+1. 复制**编译产物**（`dist/` + `client/` + `cordis.patch.yml`）到 profile 的 `node_modules`
+2. 用 python3 的 JSON 库安全更新 profile `package.json`
+   （`dependencies` + `dsh.profile.bundles`）
+3. 备份原 `package.json`
+
+它**不会**修改 DSH 运行时源码，也不依赖任何「某行恰好存在」的文本替换。
+
+### 3. 重启 DSH
 
 ```bash
 pkill -f 'dsh.*web' || true
 dsh --profile web &
 ```
 
-### 3. 访问
+### 4. 访问
 
 打开 `http://127.0.0.1:2298/` → 设置 → 插件 → **「我的插件仓库」**
 
-或通过侧边栏按钮直接访问。
-
-### 4. 安装技能型插件
+### 卸载
 
 ```bash
-./scripts/sync-to-dsh.sh          # 批量：已装则更新、未装则安装
-make install NAME=lucky-api       # 单个（等价 ./scripts/install-plugin.sh lucky-api）
+make uninstall NAME=lucky-api      # 技能
+make uninstall-panel               # 面板（从备份完整还原 package.json）
 ```
 
 ## 📁 仓库结构
 
 ```
-DSHPlugin/
+DSHPlugins/
 ├── skills/                         # 技能型插件（SKILL.md，DSH 扫描发现）
 │   ├── lucky-api/                  #   Lucky 实例 API 调用（零依赖客户端 + 接口清单）
 │   ├── hello-plugin/               #   示例技能
-│   └── README.md                   #   本目录约定与校验方式
+│   └── README.md
 ├── agents/                         # 智能体 / 专家包（暂无）
 │   └── README.md
 ├── mcps/                           # MCP 服务配置（暂无）
 │   └── README.md
 ├── panels/                         # 运行时面板插件（DSH extensions 双半包）
-│   ├── dsh-plugin-repo-manager/    #   「我的插件仓库」面板
+│   ├── dsh-plugin-repo-manager/
+│   │   ├── dist/index.js           #  ★ 服务端编译产物（已入库）
+│   │   ├── client/client.js        #  ★ 客户端编译产物（已入库）
+│   │   ├── src/                    #    TS 源码（安装时不复制）
+│   │   ├── cordis.patch.yml        #    Cordis 挂载配置
+│   │   ├── manifest.json           #    元数据（版本号来源）
+│   │   └── package.json            #    main 指向 dist/index.js
 │   └── README.md
 ├── docs/                           # 文档
-│   ├── architecture.md             # 架构说明
-│   ├── FAQ.md                      # 常见问题
-│   ├── development-runbook.md      # 开发指南
-│   └── how-to-add-a-plugin.md      # 插件开发指南
+│   ├── architecture.md             #   架构说明
+│   ├── FAQ.md                      #   常见问题
+│   ├── development-runbook.md      #   开发指南
+│   └── how-to-add-a-plugin.md      #   新增插件指南
 ├── scripts/
-│   └── install-plugin-repo.sh      # 面板安装脚本
-├── temp/                           # 中间态/过期文件（仅供参考）
-│   ├── deepseek-harness/           # 官方 DSH 源码（参考）
-│   ├── packages/                   # 官方包实现（参考）
-│   ├── docs-impl/                  # 实现文档（参考）
-│   ├── app/                        # 旧版独立面板（过期）
-│   └── templates/                  # 模板文件（参考）
+│   ├── preflight.sh                #   安装前自检（只读）
+│   ├── validate_repo.py            #   结构/契约校验（零依赖）
+│   ├── install-to-profile.sh       #   安装面板 → DSH profile
+│   ├── uninstall-from-profile.sh   #   从 profile 卸载
+│   ├── start-dsh-with-plugin.sh    #   以 --patch 方式临时加载（不改源码）
+│   └── install-plugin-repo.sh      #   已废弃，执行即退出并提示新方式
 ├── README.md
 └── Makefile
 ```
@@ -88,6 +127,21 @@ DSHPlugin/
 > ⚠️ 目录按类型分开后，管理面板的扫描目录 `repoDir` 必须同步（已改为
 > `/vol1/1000/AI/DSHPlugin/skills`），否则面板会扫不到技能、列表变空。
 > 见 `panels/dsh-plugin-repo-manager/cordis.patch.yml`。
+
+## 📦 编译产物为什么要入库
+
+`dist/index.js` 与 `client/client.js` **是提交进 git 的**，不要加进 `.gitignore`。
+
+原因：本仓库定位是「**装了就能用**」。目标机（NAS）上可能没有 Node 工具链，
+也可能不方便跑 `npm install`。把产物入库后：
+
+- 安装 = 纯文件复制，秒级完成
+- 不受目标机 Node/npm 版本影响
+- `git pull` 即得到可直接运行的最新版
+
+改完源码后请在**开发机**执行 `npm run build`，并把产物一起提交。
+`scripts/preflight.sh` 会在产物缺失或过期时报 FAIL 提醒。
+
 
 ## 🎯 功能特性
 

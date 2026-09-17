@@ -10,6 +10,7 @@
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, mkdirSync, statSync } from 'node:fs'
 import { resolve, join, dirname } from 'node:path'
+import { homedir } from 'node:os'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
@@ -36,19 +37,34 @@ const DEFAULT_CONFIG = {
  */
 function resolveRepoDir(ctx: any): string {
   const config = ctx.get?.('config') as Record<string, unknown> | undefined
-  return (config?.['repoDir'] as string | undefined)
+  const raw = (config?.['repoDir'] as string | undefined)
     ?? process.env.DSH_PLUGIN_REPO_DIR
     ?? DEFAULT_CONFIG.repoDir
+  return expandHome(raw)
 }
 
 /**
  * 解析 skills 目录
  */
+/**
+ * 展开路径中的 `~`（Node 的 fs 不认波浪号，配置文件里常写 ~/.dsh/skills）。
+ * 仅处理开头的 `~` 或 `~/`，与 shell 语义一致。
+ */
+function expandHome(p: string): string {
+  if (!p) return p
+  if (p === '~') return homedir()
+  if (p.startsWith('~/') || p.startsWith('~\\')) {
+    return join(homedir(), p.slice(2))
+  }
+  return p
+}
+
 function resolveSkillsDir(ctx: any): string {
   const config = ctx.get?.('config') as Record<string, unknown> | undefined
-  return (config?.['skillsDir'] as string | undefined)
+  const raw = (config?.['skillsDir'] as string | undefined)
     ?? process.env.DSH_PLUGIN_SKILLS_DIR
     ?? DEFAULT_CONFIG.skillsDir()
+  return expandHome(raw)
 }
 
 /**

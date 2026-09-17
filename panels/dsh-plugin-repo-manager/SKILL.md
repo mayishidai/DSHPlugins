@@ -16,16 +16,31 @@ invocation:
 | 项 | 值 |
 |----|-----|
 | 类型 | `runtime`（Cordis 双半包：host + client） |
-| 入口 | host `src/index.ts` / client `client/client.js` |
+| 服务端入口 | `dist/index.js`（**编译产物，已入库**） |
+| 客户端入口 | `client/client.js`（自包含 bundle，已入库） |
 | 挂载 | `cordis.patch.yml` |
 
 它由 DSH 运行时加载，**不通过技能加载器调用**（`modelInvocable: false`）。人的入口是设置面板 UI。
+
+**装了就能用**：产物已编译并提交进 git，目标机不需要 npm 或编译工具链。
 
 ## 用法
 
 1. 重启 DSH
 2. 打开 `http://127.0.0.1:2298/`
 3. 进入 **设置** → **插件** → 点击 **「我的插件仓库」** tab
+
+## 安装 / 卸载（不污染 DSH 源码）
+
+```bash
+# 安装（从仓库根目录执行）
+bash scripts/install-to-profile.sh
+
+# 卸载（从备份完整还原 profile package.json）
+bash scripts/uninstall-from-profile.sh
+```
+
+只写入 DSH 的 **profile 目录**（用户数据区），**不修改 DSH 运行时源码**。
 
 ## 版本与更新
 
@@ -51,13 +66,18 @@ invocation:
 ```
 
 > `repoDir` **必须指向按类型分层的仓库根**（含插件子目录的那一层，通常是 `DSHPlugins/skills`），不是仓库根目录本身。
+>
+> `skillsDir` / `repoDir` 支持 `~`，会被自动展开为家目录（不会写成字面量 `~` 目录）。
 
 ## 开发速查
 
 ```bash
-npm install --no-save @types/react@18 @types/react-dom@18 @types/node@20
-npx tsc --noEmit                # 期望 0 error
-node scripts/test-isnewer.mjs        # 版本比较（23 例）
-node scripts/test-install-update.mjs # 安装/更新流程（24 例）
-node generate-client.mjs        # 改过 src/client/* 或 generate-client.mjs 后必须重跑
+npm install          # 首次
+npm run typecheck    # 期望 0 error
+npm run build        # 服务端 → dist/，客户端 → client/client.js
+npm test             # 23 + 24 + 14 例
 ```
+
+> 改过 `src/client/*` 或 `generate-client.mjs` 后必须重跑 `npm run build`；
+> `dist/` 与 `client/client.js` 是**要提交入库的产物**。
+

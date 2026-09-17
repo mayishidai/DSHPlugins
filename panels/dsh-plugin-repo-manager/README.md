@@ -64,12 +64,38 @@ node scripts/test-isnewer.mjs
 
 ## 安装
 
-```bash
-# 方式 1: 直接复制
-bash scripts/install.sh
+本插件**已把编译产物入库**，目标机无需 npm / 编译工具链。
 
-# 方式 2: 手动复制
-cp -r . /vol2/@appdata/deepseek.harness/dsh-runtime/node_modules/@deepseek-ai/
+```bash
+# 推荐：从仓库根目录安装（只写 DSH profile，不改 DSH 源码）
+bash ../../scripts/install-to-profile.sh
+
+# 或指定 profile 路径
+PROFILE_DIR=/vol2/@appdata/deepseek.harness/dsh-data/profiles/web \
+    bash ../../scripts/install-to-profile.sh
+```
+
+安装脚本做三件事：复制 `dist/` + `client/` + `cordis.patch.yml` 到 profile 的
+`node_modules/@deepseek-ai/dsh-plugin-repo-manager/`、用 python3 安全更新
+profile `package.json`、备份原 `package.json`。
+
+卸载（从备份完整还原）：
+
+```bash
+bash ../../scripts/uninstall-from-profile.sh
+```
+
+> `scripts/install.sh` 只做文件复制，不含注册步骤；完整流程请用上面的根目录脚本。
+
+### 从源码构建（开发机）
+
+改完源码后需要重新编译并提交产物：
+
+```bash
+npm install          # 首次
+npm run build        # 服务端 tsc + 客户端 bundle
+npm test             # 三项测试
+npm run typecheck    # 0 error
 ```
 
 ## 使用方法
@@ -97,62 +123,72 @@ cp -r . /vol2/@appdata/deepseek.harness/dsh-runtime/node_modules/@deepseek-ai/
 
 ```
 dsh-plugin-repo-manager/
-├── src/
-│   ├── index.ts          # Host 入口（扫描/安装/卸载/更新/版本比较）
+├── src/                    # TypeScript 源码（安装时不复制到目标机）
+│   ├── index.ts            # Host 入口（扫描/安装/卸载/更新/版本比较）
 │   ├── types/
-│   │   └── host.d.ts     # DSH 宿主包类型声明桩（仅类型检查用）
+│   │   └── host.d.ts       # DSH 宿主包类型声明桩（仅类型检查用）
 │   └── client/
-│       ├── index.tsx     # Client 注册（含 JSX，故为 .tsx）
-│       ├── locales.ts    # 国际化字典
+│       ├── index.tsx       # Client 注册（含 JSX，故为 .tsx）
+│       ├── locales.ts      # 国际化字典
 │       └── PluginRepoPanel.tsx  # React 面板组件
+├── dist/                   # ★ 服务端编译产物（入库，安装时使用）
+│   ├── index.js
+│   └── index.d.ts
 ├── client/
-│   └── client.js         # 预编译客户端 bundle（由 generate-client.mjs 生成）
-├── cordis.patch.yml      # Cordis 配置
-├── manifest.json         # 插件元数据（版本号来源之一）
-├── package.json
+│   └── client.js           # ★ 客户端 bundle（入库，由 generate-client.mjs 生成）
+├── cordis.patch.yml        # Cordis 挂载配置
+├── manifest.json           # 插件元数据（版本号来源之一）
+├── package.json            # main → dist/index.js
+├── tsconfig.json           # 类型检查配置（noEmit）
+├── tsconfig.build.json     # 编译配置（输出到 dist/）
+├── generate-client.mjs     # 客户端 bundle 生成脚本
 └── scripts/
-    ├── install.sh        # 安装脚本
-    ├── test-isnewer.mjs  # 版本比较单元测试
-    └── test-install-update.mjs  # 安装/更新流程端到端测试
+    ├── install.sh          # 仅复制文件（完整安装用根目录脚本）
+    ├── test-isnewer.mjs    # 版本比较单元测试
+    ├── test-install-update.mjs  # 安装/更新流程端到端测试
+    └── test-paths.mjs      # 路径解析测试
 ```
 
 ## 与官方实现的区别
 
 | 方面 | 官方实现 | 本插件 |
 |------|----------|--------|
-| 位置 | DSH 源码树 | 独立 npm 包 |
-| 编译 | 需要重新编译 DSH | 无需编译 |
-| 安装 | 内置 | 可插拔 |
-| 更新 | 随 DSH 版本 | 独立更新 |
+| 位置 | DSH 源码树内 | 独立包，装在 profile |
+| 修改宿主 | 需要改 DSH 源码 | **不改 DSH 任何文件** |
+| 编译 | 随 DSH 一起编译 | 本仓库自行编译，产物入库 |
+| 安装 | 内置 | 可插拔（复制 + 注册） |
+| 更新 | 随 DSH 版本 | 独立更新，带备份留档 |
 
 ## 持久化
 
-由于 DSH 重启可能清除 `node_modules`，建议：
+若 DSH 或容器重启后 profile 的 `node_modules` 可能被清空，可让安装脚本随启动自动执行：
 
 ```bash
-# 添加自动恢复脚本
 cat >> /etc/profile.d/dsh-plugin-repo.sh << 'EOF'
-bash /vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager/scripts/install.sh 2>/dev/null &
+if [ -d "/vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager" ]; then
+    bash /vol1/1000/AI/DSHPlugin/scripts/install-to-profile.sh >/dev/null 2>&1 || true
+fi
 EOF
 ```
+
+该脚本幂等，重复执行不会产生重复注册项。
 
 ## 开发
 
 ```bash
 # 安装类型依赖（首次）
-npm install --no-save @types/react@18 @types/react-dom@18 @types/node@20
+npm install
 
 # 类型检查（应输出 0 error）
-npx tsc --noEmit
+npm run typecheck
 
-# 版本比较单元测试（23 例）
-node scripts/test-isnewer.mjs
+# 编译（服务端 → dist/，客户端 → client/client.js）
+npm run build
 
-# 安装/更新流程端到端测试（24 例，用临时目录，不碰生产环境）
-node scripts/test-install-update.mjs
-
-# 生成客户端 bundle
-node generate-client.mjs
+# 测试（版本比较 23 例 + 安装更新 24 例 + 路径 14 例）
+npm test
 ```
 
-> **注意**：`generate-client.mjs` 内嵌了一份 client 源码副本。改完 `src/client/*` 后必须同步改 `generate-client.mjs`，再重跑生成脚本，否则改动会被覆盖回旧值。
+> **注意 1**：`generate-client.mjs` 内嵌了一份 client 源码副本。改完 `src/client/*` 后必须同步改 `generate-client.mjs`，再重跑生成脚本，否则改动会被覆盖回旧值。
+>
+> **注意 2**：`dist/` 与 `client/client.js` 是**要提交进 git 的编译产物**——目标机靠它们直接运行。改完源码务必 `npm run build` 并一起提交。

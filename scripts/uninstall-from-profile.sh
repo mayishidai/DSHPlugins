@@ -1,77 +1,102 @@
 #!/bin/bash
-# 从 DSH profile 卸载 dsh-plugin-repo-manager
-# 安全方案：完全恢复安装前的状态
-# 使用方法: bash scripts/uninstall-from-profile.sh
-
 set -euo pipefail
 
-PROFILE_DIR="/vol2/@appdata/deepseek.harness/dsh-data/profiles/web"
+# 从 DSH profile 卸载 dsh-plugin-repo-manager。
+#
+# 策略：优先用安装时留下的 package.json 备份**完整还原**（最可靠），
+# 找不到备份时再退回「精确删除本插件的键」（用 python3，保证 JSON 合法）。
+#
+# 用法:
+#   bash scripts/uninstall-from-profile.sh
+#   PROFILE_DIR=/path/to/profile bash scripts/uninstall-from-profile.sh
+
+PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}"
 PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules/@deepseek-ai"
 PROFILE_PACKAGE_JSON="$PROFILE_DIR/package.json"
-PROFILE_CORDIS="$PROFILE_DIR/cordis.patch.yml"
+PKG_NAME="dsh-plugin-repo-manager"
+TARGET_DIR="$PROFILE_NODE_MODULES/$PKG_NAME"
 
-echo "=== 从 DSH Profile 卸载 dsh-plugin-repo-manager ==="
+# 路径规范化：Git Bash / Cygwin 下 python3 是原生程序，认不出 MSYS 路径。
+to_native() {
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -w "$1" 2>/dev/null || printf '%s' "$1"
+    else
+        printf '%s' "$1"
+    fi
+}
+PROFILE_PKG_NATIVE="$(to_native "$PROFILE_PACKAGE_JSON")"
+
+echo "=== 从 DSH profile 卸载 $PKG_NAME ==="
 echo ""
+
+if [ ! -d "$PROFILE_DIR" ]; then
+    echo "ERROR: DSH profile 不存在: $PROFILE_DIR" >&2
+    exit 1
+fi
 
 # 1. 删除插件目录
 echo "1. 删除插件目录..."
-if [ -d "$PROFILE_NODE_MODULES/dsh-plugin-repo-manager" ]; then
-    rm -rf "$PROFILE_NODE_MODULES/dsh-plugin-repo-manager"
-    echo "   ✓ 已删除插件目录"
+if [ -d "$TARGET_DIR" ]; then
+    rm -rf "$TARGET_DIR"
+    echo "   ✓ 已删除 $TARGET_DIR"
 else
     echo "   ✓ 插件目录不存在，跳过"
 fi
 
-# 2. 恢复 package.json
+# 2. 还原 package.json
 echo ""
-echo "2. 恢复 package.json..."
-python3 -c "
+echo "2. 还原 profile package.json..."
+
+LATEST_BAK="$(ls -1t "$PROFILE_DIR"/package.json.bak-* 2>/dev/null | head -1 || true)"
+
+if [ -n "$LATEST_BAK" ] && [ -f "$LATEST_BAK" ]; then
+    # 备份里若已含本插件（说明备份是「安装前」的快照，正常不含），
+    # 仍以备份为准还原；随后再用 python 兜底清理一次，确保干净。
+    cp "$LATEST_BAK" "$PROFILE_PACKAGE_JSON"
+    echo "   ✓ 已从备份还原: $(basename "$LATEST_BAK")"
+fi
+
+python3 - "$PROFILE_PKG_NATIVE" "$PKG_NAME" <<'PYEOF'
 import json
-with open('$PROFILE_PACKAGE_JSON', 'r') as f:
+import sys
+
+pkg_path, pkg_name = sys.argv[1], sys.argv[2]
+
+with open(pkg_path, 'r', encoding='utf-8') as f:
     data = json.load(f)
 
-# 移除 dependency
-deps = data.get('dependencies', {})
-deps.pop('dsh-plugin-repo-manager', None)
+changed = []
 
-# 移除 bundle
-bundles = data.get('dsh', {}).get('profile', {}).get('bundles', [])
-if 'dsh-plugin-repo-manager' in bundles:
-    bundles.remove('dsh-plugin-repo-manager')
+deps = data.get('dependencies')
+if isinstance(deps, dict) and pkg_name in deps:
+    deps.pop(pkg_name)
+    changed.append('dependencies')
 
-with open('$PROFILE_PACKAGE_JSON', 'w') as f:
+dsh = data.get('dsh')
+if isinstance(dsh, dict):
+    prof = dsh.get('profile')
+    if isinstance(prof, dict):
+        bundles = prof.get('bundles')
+        if isinstance(bundles, list) and pkg_name in bundles:
+            bundles.remove(pkg_name)
+            changed.append('dsh.profile.bundles')
+
+with open(pkg_path, 'w', encoding='utf-8') as f:
     json.dump(data, f, indent=2, ensure_ascii=False)
     f.write('\n')
-"
-echo "   ✓ 已恢复 package.json"
 
-# 3. 恢复 cordis.patch.yml
-echo ""
-echo "3. 恢复 cordis.patch.yml..."
-if grep -q "dsh-plugin-repo-manager" "$PROFILE_CORDIS" 2>/dev/null; then
-    python3 -c "
-with open('$PROFILE_CORDIS', 'r') as f:
-    content = f.read()
+if changed:
+    print("   ✓ 已移除: " + ", ".join(changed))
+else:
+    print("   ✓ 无需清理（未注册）")
+PYEOF
 
-# 移除最后一行（空行）和我们的配置
-lines = content.rstrip().split('\n')
-while lines and ('dsh-plugin-repo-manager' in lines[-1] or lines[-1].strip() == '' or lines[-1].strip().startswith('#') or lines[-1].strip().startswith('-')):
-    lines.pop()
-
-with open('$PROFILE_CORDIS', 'w') as f:
-    f.write('\n'.join(lines))
-    if lines and not lines[-1].endswith('\n'):
-        f.write('\n')
-"
-    echo "   ✓ 已恢复 cordis.patch.yml"
-else
-    echo "   ✓ cordis.patch.yml 中没有相关配置，跳过"
-fi
+# 3. 校验 JSON 合法性
+python3 -c "import json,sys; json.load(open(sys.argv[1], encoding='utf-8'))" "$PROFILE_PKG_NATIVE" \
+    && echo "3. ✓ package.json JSON 校验通过"
 
 echo ""
 echo "=== 卸载完成 ==="
 echo ""
-echo "下一步："
-echo "  1. 重启 DSH: pkill -f 'dsh.*web' && sleep 3"
-echo "  2. 访问 http://127.0.0.1:2298/ → 设置 → 插件"
+echo "下一步：重启 DSH 使改动生效。"
 echo ""

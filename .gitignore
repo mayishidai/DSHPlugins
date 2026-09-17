@@ -3,10 +3,21 @@ registry/manifest.json
 *.tmp
 .DS_Store
 
-# 忽略 Node 依赖与构建产物（类型检查本地安装即可，不入库）
+# 忽略 Node 依赖（类型检查本地安装即可，不入库）
 node_modules/
 package-lock.json
+
+# 忽略 Python 缓存（自检脚本 py_compile 会生成）
+__pycache__/
+*.pyc
+
+# 忽略废弃的旧构建目录与 sourcemap（dist/ 必须入库！见下方说明）
 lib/
+*.map
+
+# 注意：panels/*/dist/ 与 panels/*/client/client.js 是**编译产物，必须提交**。
+# 本仓库的定位是「装了就能用」——目标机（NAS）不需要 npm / 编译工具链，
+# 直接复制产物即可运行。因此不要在这里忽略 dist/。
 
 # 忽略临时目录（中间态/过期文件，仅供参考）
 temp/

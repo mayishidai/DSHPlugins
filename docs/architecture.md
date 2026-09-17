@@ -53,15 +53,66 @@ skills/jdgold/           ← jdgold 是真实已安装示例
 
 ## 3. 本仓库的安装流程
 
-`scripts/install-plugin.sh <name>` 做的事：
+### 3.1 技能型（skills/）
+
+安装 = 复制目录：
 
 1. 校验插件名合法（kebab-case）。
-2. 校验 `<分类目录>/<name>` 存在且有效（有 `SKILL.md`，或 `src/`/`client/`，或 `manifest.json`）。
+2. 校验 `skills/<name>` 存在且有效（有 `SKILL.md`）。
 3. 把整个插件目录复制到 `$DSH_HOME/skills/<name>/`。
-4. 写入 `version.json`（对齐 jdgold 格式）。
-5. 可选：执行插件 `manifest.json` 里 `scripts.install` 定义的自定义安装脚本。
 
 DSH 的 skill 提供方会自动发现新目录并刷新目录，通常无需重启即可在会话里通过 `skill` 工具调用。
+
+命令：
+
+```bash
+make install NAME=lucky-api     # 或 make install-all
+```
+
+### 3.2 面板型（panels/）
+
+面板不是「复制进 skills 就能生效」，它有 host / client 两个半包，
+需要作为 DSH 扩展动态包加载。安装链路：
+
+```
+开发机: npm run build
+   ├── tsc -p tsconfig.build.json  →  dist/index.js   （服务端编译产物）
+   └── node generate-client.mjs    →  client/client.js（客户端自包含 bundle）
+                    ↓ 产物提交进 git
+目标机: git pull
+   └── bash scripts/install-to-profile.sh
+          ├── 复制 dist/ + client/ + cordis.patch.yml → profile/node_modules/@deepseek-ai/<name>/
+          ├── python3 更新 profile package.json（dependencies + dsh.profile.bundles）
+          └── 备份原 package.json
+                    ↓
+             重启 DSH → 面板出现在「设置 → 插件」
+```
+
+### 3.3 两条硬性约束
+
+**约束一：产物必须编译好并入库。**
+
+`package.json` 的 `main` 必须指向 `dist/index.js`（**不能指向 `.ts`**），
+且 `files` 必须包含 `dist`。原因：目标机不保证有 Node 工具链，
+DSH 也不保证会帮你转译 TypeScript。`scripts/preflight.sh` 与
+`scripts/validate_repo.py` 都会在违反时报 FAIL。
+
+**约束二：安装不得修改 DSH 源码。**
+
+安装只写 **profile 目录**（`dsh-data/profiles/<profile>/`，属于用户数据区）。
+早期版本的脚本曾用 `sed -i` 改写 `dsh-runtime/node_modules/@deepseek-ai/dsh-api-remotes`
+里的文件——那是污染 DSH 安装的做法，已移除。现在所有 `package.json` 改动
+一律走 python3 的 JSON 库，保证结构合法且可完整还原。
+
+`scripts/install-plugin-repo.sh` 因此已废弃，执行即退出并提示新方式。
+
+两种不改源码的加载方式：
+
+| 方式 | 命令 | 特点 |
+|------|------|------|
+| profile 注册 | `scripts/install-to-profile.sh` | 持久，随 DSH 启动自动加载 |
+| patch 叠加 | `scripts/start-dsh-with-plugin.sh` | 临时，用 `--patch` 运行时叠加 |
+
 
 ## 4. 版本与升级
 

@@ -1,44 +1,61 @@
 #!/bin/bash
 set -euo pipefail
 
-# Install plugin-repo-manager to DSH runtime
-# Usage: ./scripts/install-plugin-repo-manager.sh
+# 安装 dsh-plugin-repo-manager 到 DSH profile（用户数据区）。
+#
+# 设计原则：
+#   - 只写入 DSH 的 profile 目录，绝不修改 DSH 运行时源码；
+#   - 不复制 node_modules / src / 构建脚本，避免递归自包含与体积膨胀；
+#   - 幂等，可重复执行。
+#
+# 用法:
+#   bash scripts/install.sh
+#   PROFILE_DIR=/path/to/profile bash scripts/install.sh
 
-PLUGIN_DIR="/vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager"
-DSH_RUNTIME="/vol2/@appdata/deepseek.harness/dsh-runtime"
-DSH_NODE_MODULES="$DSH_RUNTIME/node_modules/@deepseek-ai"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_SRC="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-echo "=== Installing dsh-plugin-repo-manager ==="
+PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}"
+PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules/@deepseek-ai"
+PKG_NAME="dsh-plugin-repo-manager"
+TARGET_DIR="$PROFILE_NODE_MODULES/$PKG_NAME"
+REPO_SCRIPTS="$(cd "$PLUGIN_SRC/../.." && pwd)/scripts"
 
-# Check DSH runtime exists
-if [ ! -d "$DSH_RUNTIME" ]; then
-    echo "ERROR: DSH runtime not found at $DSH_RUNTIME"
+echo "=== 安装 $PKG_NAME ==="
+
+if [ ! -d "$PROFILE_DIR" ]; then
+    echo "ERROR: DSH profile 不存在: $PROFILE_DIR" >&2
+    echo "请用 PROFILE_DIR=... 指定正确路径。" >&2
     exit 1
 fi
 
-# Copy plugin package
-echo "Copying plugin package..."
-rm -rf "$DSH_NODE_MODULES/dsh-plugin-repo-manager"
-cp -r "$PLUGIN_DIR" "$DSH_NODE_MODULES/"
-echo "Plugin package installed."
-
-# Update dsh-api-remotes if needed
-echo "Updating dsh-api-remotes..."
-REMOTES_DIR="$DSH_NODE_MODULES/dsh-api-remotes"
-if [ -d "$REMOTES_DIR" ]; then
-    if ! grep -q "pluginRepoRemote" "$REMOTES_DIR/lib/types/client/index.js" 2>/dev/null; then
-        # Add import
-        sed -i "s/import pluginInventoryRemote from '@deepseek-ai\/dsh-host-plugin-inventory\/remote';/import pluginInventoryRemote from '@deepseek-ai\/dsh-host-plugin-inventory\/remote';\nimport pluginRepoRemote from '@deepseek-ai\/dsh-plugin-repo-manager\/remote';/" "$REMOTES_DIR/lib/types/client/index.js" 2>/dev/null || true
-        # Add to mount list
-        sed -i "s/pluginInventoryRemote, messageFeedbackRemote/pluginInventoryRemote, pluginRepoRemote, messageFeedbackRemote/" "$REMOTES_DIR/lib/types/client/index.js" 2>/dev/null || true
-        echo "Updated dsh-api-remotes to include pluginRepoRemote"
-    else
-        echo "dsh-api-remotes already includes pluginRepoRemote"
+# 编译产物必须存在——这是「编译好直接用」的前提
+for f in "dist/index.js" "client/client.js" "cordis.patch.yml"; do
+    if [ ! -f "$PLUGIN_SRC/$f" ]; then
+        echo "ERROR: 缺少 $f" >&2
+        echo "请先在仓库执行 npm run build（服务端需编译为 JS）" >&2
+        exit 1
     fi
-else
-    echo "WARNING: dsh-api-remotes not found at $REMOTES_DIR"
-fi
+done
+
+echo "复制运行文件 → $TARGET_DIR"
+rm -rf "$TARGET_DIR"
+mkdir -p "$TARGET_DIR"
+(
+    cd "$PLUGIN_SRC"
+    tar -cf - \
+        --exclude='./node_modules' \
+        --exclude='./src' \
+        --exclude='./scripts' \
+        --exclude='./tsconfig.json' \
+        --exclude='./tsconfig.build.json' \
+        --exclude='./generate-client.mjs' \
+        dist client cordis.patch.yml manifest.json package.json README.md 2>/dev/null \
+        | (cd "$TARGET_DIR" && tar -xf -)
+)
+echo "   ✓ 已复制（dist/ + client/ + 配置）"
 
 echo ""
-echo "=== Installation complete ==="
-echo "Please restart DSH for changes to take effect."
+echo "下一步：注册到 profile 并重启 DSH。推荐直接用仓库根的脚本（会自动注册）："
+echo "    bash $REPO_SCRIPTS/install-to-profile.sh"
+echo ""

@@ -1,5 +1,32 @@
 # 常见问题（FAQ）
 
+## Q0: 安装会不会修改 DSH 的源码？
+**不会。** 安装只写 DSH 的 **profile 目录**（`dsh-data/profiles/<profile>/`，属用户数据区）：
+
+- 复制编译产物到 `profile/node_modules/@deepseek-ai/<name>/`
+- 更新 profile 的 `package.json`（`dependencies` + `dsh.profile.bundles`）
+- 备份原 `package.json`
+
+`dsh-runtime/` 下的任何文件都不会被改动。
+
+> 历史遗留：早期脚本曾用 `sed -i` 改写 `dsh-api-remotes` 里的 lib 文件，那会污染 DSH 安装。
+> 现已移除，`scripts/install-plugin-repo.sh` 也废弃了（执行即退出并提示新方式）。
+> `bash scripts/preflight.sh` 会自动扫描脚本里是否还有这类操作。
+
+## Q0b: 我需要编译吗？目标机要装 npm 吗？
+**都不需要。** 编译产物（`panels/*/dist/index.js` 与 `panels/*/client/client.js`）
+**已提交进 git**。目标机上只要：
+
+```bash
+git pull
+bash scripts/install-to-profile.sh
+```
+
+即可。npm 与 TypeScript 只在开发机上用来重新编译。
+
+改完源码后请在开发机执行 `npm run build`，并把产物一起提交——别忘了这一步，
+否则目标机装到的是旧产物。`bash scripts/preflight.sh` 会检查产物是否存在与合法。
+
 ## Q1: 装好的技能，DSH 会话里怎么用？
 装进 `$DSH_HOME/skills/` 后，DSH 的 skill 提供方会自动发现。会话中模型会通过 `skill` 工具看到它；也可用用户命令面触发（取决于 SKILL.md 的 `invocation`）。若没立刻出现，可触发一次目录刷新或重启 DSH。
 
