@@ -258,6 +258,68 @@ def check_credentials(repo: Path) -> None:
         ok("未发现明文凭据（占位示例已排除）")
 
 
+def check_mcp(plugin: Path, name: str) -> None:
+    """MCP 型专属校验。
+
+    重点检查两件事：
+      1. 配置文件（`mcp.json` / `*.template.json`）是合法 JSON 且含 `mcpServers` 键
+         ——  键名写成 `servers` 不会报错，只会静默不生效，所以必须校验。
+      2. **仓库内不得硬编码易变的隧道地址**。以 hindsight 为例，其隧道端口会变
+         （有 `hindsight-mcp-repair` 技能专门自愈），硬编码会立刻过期。
+         允许占位符（`<PORT>` / `<TUNNEL_HOST>` 等），禁止真实端口。
+    """
+    if not (plugin / "README.md").is_file():
+        warn(f"{name}: 建议补 README.md（说明能力、依赖、落地路径）")
+    else:
+        ok(f"{name}: README.md 存在")
+
+    # 只看 MCP 配置片段：mcp.json / *.template.json。
+    # 明确排除 manifest.json —— 那是本仓库的元数据，不该含 mcpServers。
+    configs = sorted(
+        f
+        for f in plugin.glob("*.json")
+        if f.name != "manifest.json"
+    )
+    if not configs:
+        warn(f"{name}: 未见 mcp.json / *.template.json 配置片段")
+        return
+
+    # 易变地址特征：stun 子域后跟具体端口。占位符除外。
+    volatile = re.compile(r"stun\.[a-z0-9.-]+:\d{2,5}", re.IGNORECASE)
+    placeholder = re.compile(r"<[A-Za-z_]+>")
+
+    for cfg in configs:
+        try:
+            data = json.loads(cfg.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            bad(f"{name}: {cfg.name} 不是合法 JSON ({e})")
+            continue
+        ok(f"{name}: {cfg.name} 是合法 JSON")
+
+        if not isinstance(data, dict) or "mcpServers" not in data:
+            bad(f"{name}: {cfg.name} 缺 mcpServers 键（写成 servers 会静默失效）")
+            continue
+        ok(f"{name}: {cfg.name} 含 mcpServers 键")
+
+        servers = data["mcpServers"]
+        if not isinstance(servers, dict) or not servers:
+            bad(f"{name}: {cfg.name} 的 mcpServers 为空")
+            continue
+
+        text = cfg.read_text(encoding="utf-8")
+        if volatile.search(text):
+            # 只有在没有占位符时才判定为硬编码
+            if not placeholder.search(text):
+                bad(
+                    f"{name}: {cfg.name} 疑似硬编码易变隧道地址"
+                    f"（含 stun 域名+端口，且无占位符）"
+                )
+            else:
+                warn(f"{name}: {cfg.name} 含 stun 地址，请确认是占位符而非真实端口")
+        else:
+            ok(f"{name}: {cfg.name} 未硬编码易变隧道地址")
+
+
 def check_plugin(plugin: Path, expected_type: str) -> None:
     name = plugin.name
     print(f"\n--- {plugin} (type={expected_type}) ---")
@@ -279,6 +341,8 @@ def check_plugin(plugin: Path, expected_type: str) -> None:
             ok(f"{name}: SKILL.md 存在")
         else:
             warn(f"{name}: 建议补 SKILL.md 说明用法（面板型非必需）")
+    elif expected_type == "mcp":
+        check_mcp(plugin, name)
     else:
         if not (plugin / "README.md").is_file():
             warn(f"{name}: 建议补 README.md")

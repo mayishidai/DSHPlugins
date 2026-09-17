@@ -1,0 +1,17 @@
+{
+  "name": "hindsight",
+  "version": "1.0.0",
+  "description": "用户自建的 Hindsight MCP 服务（长期记忆存储，memory bank: zhouqing）。隧道端口会变，故本仓库只存模板与探测脚本，不存具体地址。",
+  "author": "abczhou",
+  "type": "mcp",
+  "whenToUse": "当需要接入/修复 Hindsight 长期记忆服务，或 hindsight 连接器报链接失败、握手失败、超时时。",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  },
+  "keywords": ["hindsight", "mcp", "memory", "tunnel", "stun", "memory-bank"],
+  "scripts": {
+    "resolve": "scripts/resolve_hindsight_url.py",
+    "apply": "scripts/apply_to_config.py"
+  }
+}

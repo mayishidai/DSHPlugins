@@ -10,7 +10,7 @@
 |---|---|---|
 | [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/)、[Cloudflare 官方技能 14 个](docs/upstream/cloudflare-skills/) |
 | [`agents/`](agents/) | **智能体 / 专家包**（角色定义，非能力） | _暂无_ |
-| [`mcps/`](mcps/) | **MCP 服务配置**（配置片段 + 启动脚本，不含凭据） | _暂无_ |
+| [`mcps/`](mcps/) | **MCP 服务配置**（配置片段 + 启动脚本，不含凭据） | [hindsight](mcps/hindsight/) |
 | [`panels/`](panels/) | **运行时面板插件**（DSH extensions 双半包，带 UI） | [dsh-plugin-repo-manager](panels/dsh-plugin-repo-manager/) |
 
 ### 亮点
@@ -24,6 +24,10 @@
 - **Cloudflare 官方技能**（技能 × 14） - 来自 [cloudflare/skills](https://github.com/cloudflare/skills)，Apache-2.0
   - 路由层 `cloudflare`（含 52 个产品参考包）+ Workers / Durable Objects / Agents SDK / Wrangler 等
   - **原样引入，未做任何改写**，便于随上游更新；许可证与上游 README 存于 [`docs/upstream/cloudflare-skills/`](docs/upstream/cloudflare-skills/)
+- **hindsight**（MCP） - 自建 Hindsight 长期记忆服务
+  - 藏在隧道后，**端口会变** → 仓库只存**模板 + 探测脚本**，不硬编码地址
+  - `resolve_hindsight_url.py` 从稳定跳板探测当前直连地址（可握手验证）
+  - `apply_to_config.py` 安全写入配置（只改一个字段 / 先备份 / 写前验证 / 原子写）
 
 > 各类内容的格式约定、校验方式、安装落点各见其目录下的 `README.md`。
 
@@ -106,7 +110,10 @@ DSHPlugins/
 │   └── README.md
 ├── agents/                         # 智能体 / 专家包（暂无）
 │   └── README.md
-├── mcps/                           # MCP 服务配置（暂无）
+├── mcps/                           # MCP 服务配置（不含凭据）
+│   ├── hindsight/                  #   自建 Hindsight 记忆服务（隧道后，端口会变）
+│   │   ├── mcp.template.json       #     配置模板（占位符，不存真地址）
+│   │   └── scripts/                #     探测 + 安全写入
 │   └── README.md
 ├── panels/                         # 运行时面板插件（DSH extensions 双半包）
 │   ├── dsh-plugin-repo-manager/
