@@ -27,7 +27,7 @@
 cd /vol1/1000/AI/DSHPlugin
 
 # 1) 复制模板
-cp -r templates/skill-template plugins/<技能名>
+cp -r templates/skill-template skills/<技能名>
 
 # 2) 编辑
 #    - SKILL.md：改 name（须与目录名一致，kebab-case）、description、whenToUse、正文
@@ -47,7 +47,7 @@ cp -r templates/skill-template plugins/<技能名>
 ### 运行时 / 面板型
 
 ```bash
-cp -r templates/runtime-template plugins/<面板插件名>
+cp -r templates/runtime-template panels/<面板插件名>
 # 在 src/（host 半）和 client/（浏览器面板半）写代码，删 PLACEHOLDER.md
 # manifest.json 的 type 设为 runtime / both
 # 用 DSH extensions 工具（cordis_define / cordis_run）定义并运行动态包；
@@ -86,7 +86,7 @@ cp -r templates/runtime-template plugins/<面板插件名>
 ## 3. 迭代 / 升级一个已装插件
 
 ```bash
-# 改 plugins/<name> 里的内容 + 升 manifest.json 的 version
+# 改 <分类目录>/<name> 里的内容 + 升 manifest.json 的 version
 
 # 覆盖式安装（旧 version.json 自动存为 previous_version）
 ./scripts/install-plugin.sh <name> --force
@@ -120,8 +120,8 @@ cp -r templates/runtime-template plugins/<面板插件名>
 
 ## 6. 高级：让 DSH 直接扫描本仓库（免复制）
 
-在 DSH 的 skill-filesystem 配置里，把仓库的 `plugins/` 加入 `customSkillDirs`，
-即可让 `plugins/` 下的技能被实时发现，省去安装复制。
+在 DSH 的 skill-filesystem 配置里，把仓库的 `skills/` 加入 `customSkillDirs`，
+即可让 `skills/` 下的技能被实时发现，省去安装复制。
 `install-plugin.sh` 则保留给「分发 / 打包 / 版本记录」场景。
 
 ---

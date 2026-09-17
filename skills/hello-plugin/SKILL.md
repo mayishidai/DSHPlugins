@@ -28,4 +28,4 @@ hello-plugin/
 
 ## 删除它
 
-不需要时，删除整个 `plugins/hello-plugin/` 目录，再运行 `./scripts/sync-to-dsh.sh --prune` 清理。
+不需要时，删除整个 `skills/hello-plugin/` 目录，再运行 `./scripts/sync-to-dsh.sh --prune` 清理。

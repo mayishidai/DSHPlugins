@@ -4,7 +4,7 @@ set -euo pipefail
 # Install plugin-repo-manager to DSH runtime
 # Usage: ./scripts/install-plugin-repo-manager.sh
 
-PLUGIN_DIR="/vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager"
+PLUGIN_DIR="/vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager"
 DSH_RUNTIME="/vol2/@appdata/deepseek.harness/dsh-runtime"
 DSH_NODE_MODULES="$DSH_RUNTIME/node_modules/@deepseek-ai"
 

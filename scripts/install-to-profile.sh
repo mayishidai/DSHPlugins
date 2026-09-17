@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-PLUGIN_DIR="/vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager"
+PLUGIN_DIR="/vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager"
 PROFILE_DIR="/vol2/@appdata/deepseek.harness/dsh-data/profiles/web"
 PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules/@deepseek-ai"
 PROFILE_PACKAGE_JSON="$PROFILE_DIR/package.json"

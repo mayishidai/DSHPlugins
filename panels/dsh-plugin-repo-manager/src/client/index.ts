@@ -16,7 +16,7 @@ export const inject = ['slots', 'locale']
 export function apply(ctx: any): void {
   const config = ctx.get?.('pluginRepoConfig') as { pollInterval: number; repoDir: string; skillsDir: string } | undefined
   const pollInterval = config?.pollInterval ?? 3000
-  const repoDir = config?.repoDir ?? '/vol1/1000/AI/DSHPlugin/plugins'
+  const repoDir = config?.repoDir ?? '/vol1/1000/AI/DSHPlugin/skills'
   const skillsDir = config?.skillsDir ?? ''
 
   ctx.effect(

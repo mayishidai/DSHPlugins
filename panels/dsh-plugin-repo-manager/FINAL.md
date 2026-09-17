@@ -3,7 +3,7 @@
 ## 📦 插件位置
 
 ```
-/vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager/
+/vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager/
 ├── src/
 │   ├── index.ts              # Host 入口
 │   └── client/
@@ -31,7 +31,7 @@
 
 ```bash
 rm -rf /vol2/@appdata/deepseek.harness/dsh-runtime/node_modules/@deepseek-ai/dsh-plugin-repo-manager
-cp -r /vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager /vol2/@appdata/deepseek.harness/dsh-runtime/node_modules/@deepseek-ai/
+cp -r /vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager /vol2/@appdata/deepseek.harness/dsh-runtime/node_modules/@deepseek-ai/
 ```
 
 ### 2. 重启 DSH
@@ -47,7 +47,7 @@ dsh --profile web &
 
 ## 🔧 配置
 
-默认仓库目录：`/vol1/1000/AI/DSHPlugin/plugins`
+默认仓库目录：`/vol1/1000/AI/DSHPlugin/skills`
 
 如需修改，编辑 `cordis.patch.yml`：
 
@@ -80,10 +80,10 @@ dsh --profile web &
 
 ## 📋 当前插件列表
 
-查看 `/vol1/1000/AI/DSHPlugin/plugins/` 目录：
+查看 `/vol1/1000/AI/DSHPlugin/skills/` 目录：
 
 ```bash
-ls /vol1/1000/AI/DSHPlugin/plugins/
+ls /vol1/1000/AI/DSHPlugin/skills/
 ```
 
 ## 🔒 安全性
@@ -98,7 +98,7 @@ ls /vol1/1000/AI/DSHPlugin/plugins/
 
 ```bash
 cat >> /etc/profile.d/dsh-plugin-repo.sh << 'EOF'
-bash /vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager/scripts/install.sh 2>/dev/null &
+bash /vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager/scripts/install.sh 2>/dev/null &
 EOF
 ```
 

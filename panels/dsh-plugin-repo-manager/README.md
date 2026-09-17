@@ -28,7 +28,7 @@ cp -r . /vol2/@appdata/deepseek.harness/dsh-runtime/node_modules/@deepseek-ai/
 
 ## 配置
 
-默认仓库目录：`/vol1/1000/AI/DSHPlugin/plugins`
+默认仓库目录：`/vol1/1000/AI/DSHPlugin/skills`
 
 如需修改，编辑 `cordis.patch.yml`：
 
@@ -74,7 +74,7 @@ dsh-plugin-repo-manager/
 ```bash
 # 添加自动恢复脚本
 cat >> /etc/profile.d/dsh-plugin-repo.sh << 'EOF'
-bash /vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager/scripts/install.sh 2>/dev/null &
+bash /vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager/scripts/install.sh 2>/dev/null &
 EOF
 ```
 

@@ -1,12 +1,21 @@
 # 如何新增一个插件（step-by-step）
 
+先选**类型目录**——本仓库按类型分层，不要混放：
+
+| 你要加的东西 | 放这里 |
+|---|---|
+| 指令型能力（有 `SKILL.md`） | `skills/<name>/` |
+| 智能体 / 专家角色 | `agents/<name>/` |
+| MCP 服务配置（不含凭据） | `mcps/<name>/` |
+| 带 UI 的运行时扩展 | `panels/<name>/` |
+
 ## A. 技能型插件（最常用，推荐）
 
 ```bash
 cd /vol1/1000/AI/DSHPlugin
 
 # 1. 复制模板
-cp -r templates/skill-template plugins/<你的技能名>
+cp -r templates/skill-template skills/<你的技能名>
 
 # 2. 改 SKILL.md 的 name / description（name 必须与目录名一致，kebab-case）
 #    并把正文改成你的技能说明。
@@ -32,7 +41,7 @@ cp -r templates/skill-template plugins/<你的技能名>
 cd /vol1/1000/AI/DSHPlugin
 
 # 1. 复制模板
-cp -r templates/runtime-template plugins/<你的面板插件名>
+cp -r templates/runtime-template panels/<你的面板插件名>
 
 # 2. 在 src/（host 半）和 client/（浏览器面板半）写 TS 代码，
 #    删除 PLACEHOLDER.md。
@@ -58,8 +67,15 @@ cp -r templates/runtime-template plugins/<你的面板插件名>
 
 ## 校验清单（安装前自检）
 
+- [ ] 放在**正确的类型目录**下（skills / agents / mcps / panels），没有混放
 - [ ] 目录名 = SKILL.md 的 `name`，且为 kebab-case
-- [ ] SKILL.md 首行为 `---`，frontmatter 含 `name` 和 `description`
+- [ ] SKILL.md 首行为 `---`，frontmatter 含 `name` 和 `description`（建议含 `whenToUse` / `invocation`）
 - [ ] manifest.json 的 `name` 与目录名一致
-- [ ] scripts 里的脚本有可执行权限（`chmod +x`）
-- [ ] 跑一遍 `./scripts/build-manifest.sh` 确认无告警
+- [ ] scripts 里的脚本有可执行权限（`git add --chmod=+x`）
+- [ ] 跑一遍校验脚本（只读）：
+
+  ```bash
+  python3 ~/.workbuddy/skills/dsh-plugin-repo-add/scripts/validate_plugin.py skills/<name> --repo .
+  ```
+- [ ] 根 `README.md` 的类型清单已登记该插件
+- [ ] 若新增技能，确认 `panels/dsh-plugin-repo-manager/cordis.patch.yml` 的 `repoDir` 指向包含它的目录

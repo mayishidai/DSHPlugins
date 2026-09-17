@@ -67,7 +67,7 @@ window.__ModuleLoader__.load({
     function PluginRepoPanel(props) {
       var apiBase = props.apiBase || '/api/plugin-repo';
       var initialPollInterval = props.pollInterval || 3000;
-      var repoDir = props.repoDir || '/vol1/1000/AI/DSHPlugin/plugins';
+      var repoDir = props.repoDir || '/vol1/1000/AI/DSHPlugin/skills';
       var skillsDir = props.skillsDir || '';
 
       var _s0 = React.useState([]), plugins = _s0[0], setPlugins = _s0[1];
@@ -198,7 +198,7 @@ window.__ModuleLoader__.load({
       var NS = 'settings.pluginRepo';
       var config = ctx.get && ctx.get('pluginRepoConfig') || {};
       var pollInterval = config.pollInterval || 3000;
-      var repoDir = config.repoDir || '/vol1/1000/AI/DSHPlugin/plugins';
+      var repoDir = config.repoDir || '/vol1/1000/AI/DSHPlugin/skills';
       var skillsDir = config.skillsDir || '';
 
       ctx.effect(function() { return ctx.locale && ctx.locale.register(NS, {zh:zh, en:en}); }, 'dsh-plugin-repo-manager: dictionaries');

@@ -2,7 +2,7 @@
 # DSH with plugin-repo-manager loaded via --patch
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_DIR="$SCRIPT_DIR/plugins/dsh-plugin-repo-manager"
+PLUGIN_DIR="$SCRIPT_DIR/panels/dsh-plugin-repo-manager"
 DSH_RUNTIME="/vol2/@appdata/deepseek.harness/dsh-runtime"
 DSH_BIN="$DSH_RUNTIME/node_modules/@deepseek-ai/dsh/lib/bin.js"
 

@@ -57,7 +57,7 @@ dsh-plugin-repo-manager/
     - id: plugin-repo
       name: 'dsh-plugin-repo-manager'
       config:
-        repoDir: '/vol1/1000/AI/DSHPlugin/plugins'
+        repoDir: '/vol1/1000/AI/DSHPlugin/skills'
         skillsDir: '~/.dsh/skills'
         pollInterval: 3000
 ```

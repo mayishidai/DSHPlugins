@@ -8,8 +8,9 @@
 
 ```
 DSHPlugin/
-├── plugins/
-│   └── dsh-plugin-repo-manager/    # 插件包（可插拔）
+├── skills/                         # 技能型插件
+├── panels/
+│   └── dsh-plugin-repo-manager/    # 面板插件包（可插拔）
 │       ├── src/
 │       │   ├── index.ts            # Host 入口
 │       │   └── client/
@@ -31,7 +32,7 @@ DSHPlugin/
 ### 1. 复制插件到 DSH runtime
 
 ```bash
-bash /vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager/scripts/install.sh
+bash /vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager/scripts/install.sh
 ```
 
 ### 2. 重启 DSH
@@ -59,7 +60,7 @@ dsh --profile web &
 
 ## 配置
 
-默认仓库目录：`/vol1/1000/AI/DSHPlugin/plugins`
+默认仓库目录：`/vol1/1000/AI/DSHPlugin/skills`
 
 如需修改，编辑 `cordis.patch.yml`：
 
@@ -91,8 +92,8 @@ dsh --profile web &
 # 添加自动恢复脚本
 cat >> /etc/profile.d/dsh-plugin-repo.sh << 'EOF'
 # Auto-install plugin-repo-manager on DSH start
-if [ -d "/vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager" ]; then
-    bash /vol1/1000/AI/DSHPlugin/plugins/dsh-plugin-repo-manager/scripts/install.sh
+if [ -d "/vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager" ]; then
+    bash /vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager/scripts/install.sh
 fi
 EOF
 ```

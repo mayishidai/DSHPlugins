@@ -19,8 +19,8 @@ export const name = 'dsh-plugin-repo-manager'
  * 默认配置
  */
 const DEFAULT_CONFIG = {
-  /** 仓库目录 */
-  repoDir: '/vol1/1000/AI/DSHPlugin/plugins',
+  /** 仓库目录：本仓库按「类型」分层，技能型统一放在顶层 skills/ 下 */
+  repoDir: '/vol1/1000/AI/DSHPlugin/skills',
   /** skills 目录 */
   skillsDir: () => join(process.env.DSH_HOME || join(process.env.HOME || '', '.dsh'), 'skills'),
   /** 轮询间隔（毫秒） */
