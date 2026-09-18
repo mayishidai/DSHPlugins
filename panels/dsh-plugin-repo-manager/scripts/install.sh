@@ -31,9 +31,17 @@ echo "" >&2
 
 if [ ! -f "$REPO_SCRIPTS/install-to-profile.sh" ]; then
     echo "ERROR: 找不到唯一实现 $REPO_SCRIPTS/install-to-profile.sh" >&2
-    echo "       本文件（插件内的 scripts/install.sh）不在安装载荷里，" >&2
-    echo "       只在仓库内有效；请从仓库根执行：" >&2
-    echo "           bash scripts/install-to-profile.sh" >&2
+    echo "" >&2
+    echo "本目录**不能单独安装** —— 唯一安装脚本在仓库根的 scripts/ 下。" >&2
+    echo "本文件（插件内的 scripts/install.sh）只在仓库内有效。" >&2
+    echo "" >&2
+    echo "请改用仓库根（DSH 在 NAS 上时）：" >&2
+    echo "    cd /vol1/1000/AI/DSHPlugin" >&2
+    echo "    bash scripts/install-to-profile.sh" >&2
+    echo "" >&2
+    echo "⚠️ 不要把本目录 cp 到 node_modules/@deepseek-ai/ 或 dsh-runtime/ 下：" >&2
+    echo "   包名不带作用域，必须落在 node_modules/<包名>（父目录正好是 node_modules），" >&2
+    echo "   否则 Node 解析不到，DSH 会报 received undefined。" >&2
     exit 1
 fi
 

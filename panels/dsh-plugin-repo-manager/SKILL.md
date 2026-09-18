@@ -32,8 +32,36 @@ invocation:
 
 ## 安装 / 卸载（不污染 DSH 源码）
 
+> ### ⚠️ 本目录**不能单独安装**
+>
+> 唯一安装脚本在**仓库根**的 `scripts/` 下，**不在本目录里**。
+> 本目录内的 `scripts/install.sh` 只是**转发桩**，脱离仓库会直接报错退出（退出码 1）。
+>
+> **如果你是被交付「这个目录」的 agent**：请改用**仓库根**，不要就地安装：
+>
+> | 环境 | 仓库根 |
+> |---|---|
+> | NAS（DSH 所在） | `/vol1/1000/AI/DSHPlugin` |
+> | 本机开发（Windows） | `C:\Users\abczhou\WorkBuddy\DSHPlugins` |
+>
+> ```bash
+> cd /vol1/1000/AI/DSHPlugin
+> git pull                            # 取最新（含本插件产物）
+> bash scripts/preflight.sh           # 可选，自检
+> bash scripts/install-to-profile.sh  # 唯一的安装命令
+> ```
+>
+> **❌ 绝对不要做的事**：把本目录 `cp -r` 到
+> `node_modules/@deepseek-ai/` 或 `dsh-runtime/` 里。
+> 本包的 `package.json.name`、`cordis.patch.yml` 的 loader `name`、
+> profile `dependencies` 的 key **全都不带作用域**，
+> 所以它只能落在 `node_modules/dsh-plugin-repo-manager`（父目录必须正好是
+> `node_modules`）。装进作用域目录 → Node 按裸包名解析不到 → DSH 启动报
+> `invalid plugin, expect function or object with an "apply" method, received undefined`。
+> 写进 `dsh-runtime/` 还额外违反「安装不得污染 DSH 源码」。
+
 ```bash
-# 安装（从仓库根目录执行）
+# 安装（在【仓库根】执行，不是在本目录）
 bash scripts/install-to-profile.sh
 
 # 卸载（从备份完整还原 profile package.json）
