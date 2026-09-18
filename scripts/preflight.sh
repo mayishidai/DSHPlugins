@@ -69,8 +69,61 @@ else
 fi
 echo ""
 
-# ---------- 3. 面板型插件：编译产物必须齐全 ----------
-echo "3. 面板型插件（panels/）— 编译产物检查"
+# ---------- 3. MCP 型插件：脚本语法 + 配置合法 ----------
+echo "3. MCP 型插件（mcps/）"
+if [ -d mcps ]; then
+    for d in mcps/*/; do
+        [ -d "$d" ] || continue
+        n="$(basename "$d")"
+        [ -f "$d/README.md" ] && ok "$n: README.md 存在" || warn "$n: 建议补 README.md"
+        # 脚本语法：.py 与 .sh 都查（.sh 漏查过，故一并纳入）
+        if [ -d "$d/scripts" ]; then
+            for py in "$d"/scripts/*.py; do
+                [ -f "$py" ] || continue
+                if PYTHONPATH= python3 -m py_compile "$py" 2>/dev/null; then
+                    ok "$n: $(basename "$py") 语法通过"
+                else
+                    bad "$n: $(basename "$py") 语法错误"
+                fi
+            done
+            for sh in "$d"/scripts/*.sh; do
+                [ -f "$sh" ] || continue
+                if bash -n "$sh" 2>/dev/null; then
+                    ok "$n: $(basename "$sh") 语法通过"
+                else
+                    bad "$n: $(basename "$sh") 语法错误"
+                fi
+            done
+        fi
+        # 配置片段：必须含 mcpServers 键，且不得硬编码易变隧道地址
+        for cfg in "$d"/*.json; do
+            [ -f "$cfg" ] || continue
+            [ "$(basename "$cfg")" = "manifest.json" ] && continue
+            if python3 -c "import json,sys; json.load(open(sys.argv[1],encoding='utf-8'))" "$cfg" 2>/dev/null; then
+                ok "$n: $(basename "$cfg") JSON 合法"
+            else
+                bad "$n: $(basename "$cfg") JSON 非法"
+                continue
+            fi
+            if grep -q '"mcpServers"' "$cfg"; then
+                ok "$n: $(basename "$cfg") 含 mcpServers 键"
+            else
+                bad "$n: $(basename "$cfg") 缺 mcpServers 键（写成 servers 会静默失效）"
+            fi
+            if grep -qE 'stun\.[a-z0-9.-]+:[0-9]{2,5}' "$cfg" && ! grep -qE '<[A-Za-z_]+>' "$cfg"; then
+                bad "$n: $(basename "$cfg") 疑似硬编码易变隧道地址"
+            else
+                ok "$n: $(basename "$cfg") 未硬编码易变隧道地址"
+            fi
+        done
+    done
+else
+    warn "mcps/ 不存在"
+fi
+echo ""
+
+# ---------- 4. 面板型插件：编译产物必须齐全 ----------
+echo "4. 面板型插件（panels/）— 编译产物检查"
 if [ -d panels ]; then
     for d in panels/*/; do
         [ -d "$d" ] || continue
@@ -134,8 +187,8 @@ else
 fi
 echo ""
 
-# ---------- 4. 安装脚本安全性：不得改写 DSH 源码 ----------
-echo "4. 安装脚本安全性（禁止污染 DSH 源码）"
+# ---------- 5. 安装脚本安全性：不得改写 DSH 源码 ----------
+echo "5. 安装脚本安全性（禁止污染 DSH 源码）"
 for f in scripts/*.sh; do
     [ -f "$f" ] || continue
     b="$(basename "$f")"
@@ -151,8 +204,8 @@ for f in scripts/*.sh; do
 done
 echo ""
 
-# ---------- 5. 无凭据入库 ----------
-echo "5. 凭据粗筛"
+# ---------- 6. 无凭据入库 ----------
+echo "6. 凭据粗筛"
 # 与 validate_repo.py 的 check_credentials 保持同一判据：
 # 值必须是单一 token（无空格/引号），且需排除占位示例（your-xxx、${VAR}、example 等）。
 # 否则文档里必然出现的示例（如 CLOUDFLARE_API_TOKEN="your_token_here"）会持续误报。

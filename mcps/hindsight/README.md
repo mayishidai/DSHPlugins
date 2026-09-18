@@ -33,8 +33,12 @@ mcps/hindsight/
 ├── mcp.template.json              # 配置模板（含占位符，不含真地址）
 └── scripts/
     ├── resolve_hindsight_url.py   # 从跳板探测当前的隧道直连地址（只读）
-    └── apply_to_config.py         # 把探测结果写入配置（带备份/验证/原子写）
+    ├── apply_to_config.py         # 把探测结果写入配置（带备份/验证/原子写）
+    └── selfheal.sh                # 无人值守封装（供定时自动化 / cron 调用）
 ```
+
+> **这三个脚本是本仓库对 hindsight 自愈逻辑的唯一实现。** 别在别处再写一份 ——
+> 见下方「为什么强调唯一实现」。
 
 ## 用法
 
@@ -68,6 +72,40 @@ python3 mcps/hindsight/scripts/apply_to_config.py --config /path/to/mcp.json
 
 写入脚本的安全保证：**只改 hindsight 一个条目的 `url`** · 先备份 · 写前验证 ·
 原子写 · 改坏了可还原。已实测其他条目不被动、`disabled` 等字段保留。
+
+### 无人值守（自动自愈）
+
+```bash
+bash mcps/hindsight/scripts/selfheal.sh              # 修 ~/.workbuddy/mcp.json
+bash mcps/hindsight/scripts/selfheal.sh --dry-run    # 只看不做
+MCP_CONFIG=/path/to/mcp.json bash mcps/hindsight/scripts/selfheal.sh
+```
+
+`selfheal.sh` 是**薄封装**：自己不实现探测/写入，只负责找 python、把路径转成原生形式、
+调 `apply_to_config.py`、写日志、把退出码翻译成可读结论。日志默认在
+`~/.workbuddy/hindsight_selfheal.log`（可用 `SELFHEAL_LOG` 覆盖）。
+
+退出码：`0` 成功或无需变更 · `1` 失败（跳板不通 / 握手失败 / 配置异常）
+
+**已配置定时自动化**在本机每 6 小时跑一次（WorkBuddy 侧）。NAS 侧若也要自动自愈，
+用 cron 调用同一个 `selfheal.sh` 即可（脚本自定位，不依赖 cwd）：
+
+```cron
+0 */6 * * * MCP_CONFIG=/vol2/@appdata/deepseek.harness/dsh-data/<mcp 配置> \
+  bash /vol1/1000/AI/DSHPlugin/mcps/hindsight/scripts/selfheal.sh
+```
+
+## 为什么强调唯一实现
+
+这段逻辑**曾经有三份各自独立的实现**，改一处容易漏两处：
+
+| 位置 | 状态 |
+|---|---|
+| `mcps/hindsight/scripts/`（本目录） | ✅ **唯一实现**，保留 |
+| `~/.workbuddy/skills/hindsight-mcp-repair/SKILL.md` 的内联 curl/python 片段 | ❌ 已删除，改为指向本目录 |
+| `WorkBuddy/2026-08-04-10-01-11/.workbuddy/hindsight_selfheal.sh` | ❌ 已改为**纯转发桩**，不含逻辑 |
+
+统一于 2026-09-18。**要改逻辑请只改本目录的三个文件。**
 
 ## 落地位置（三个客户端各不相同）
 

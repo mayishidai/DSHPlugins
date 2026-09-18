@@ -28,6 +28,8 @@
   - 藏在隧道后，**端口会变** → 仓库只存**模板 + 探测脚本**，不硬编码地址
   - `resolve_hindsight_url.py` 从稳定跳板探测当前直连地址（可握手验证）
   - `apply_to_config.py` 安全写入配置（只改一个字段 / 先备份 / 写前验证 / 原子写）
+  - `selfheal.sh` 无人值守封装，供定时自动化与 cron 调用
+  - **这套脚本是自愈逻辑的唯一实现**，技能与旧脚本位置均转发至此
 
 > 各类内容的格式约定、校验方式、安装落点各见其目录下的 `README.md`。
 
@@ -113,7 +115,7 @@ DSHPlugins/
 ├── mcps/                           # MCP 服务配置（不含凭据）
 │   ├── hindsight/                  #   自建 Hindsight 记忆服务（隧道后，端口会变）
 │   │   ├── mcp.template.json       #     配置模板（占位符，不存真地址）
-│   │   └── scripts/                #     探测 + 安全写入
+│   │   └── scripts/                #     唯一实现：探测 + 安全写入 + 无人值守
 │   └── README.md
 ├── panels/                         # 运行时面板插件（DSH extensions 双半包）
 │   ├── dsh-plugin-repo-manager/
