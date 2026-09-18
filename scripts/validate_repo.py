@@ -177,6 +177,76 @@ def check_panel(plugin: Path, name: str) -> None:
     else:
         bad(f"{name}: 缺 cordis.patch.yml")
 
+    # ---- 名字一致性（加载成败的根因，见下方 check_panel_names） ----
+    check_panel_names(plugin, name)
+
+    # ---- manifest 的 entry 必须指向真实产物 ----
+    mf_path = plugin / "manifest.json"
+    if mf_path.is_file():
+        try:
+            mf = json.loads(mf_path.read_text(encoding="utf-8"))
+        except Exception:
+            mf = {}
+        entry = mf.get("entry") or {}
+        srv = entry.get("server")
+        if isinstance(srv, str) and srv:
+            if srv.endswith(".ts"):
+                bad(f"{name}: manifest entry.server 指向 .ts（{srv}）—— "
+                    f"安装时 src/ 不会被复制，运行期必然找不到；应为 dist/index.js")
+            elif not (plugin / srv).is_file():
+                bad(f"{name}: manifest entry.server 指向不存在的文件（{srv}）")
+            else:
+                ok(f"{name}: manifest entry.server = {srv}")
+
+
+def check_panel_names(plugin: Path, name: str) -> None:
+    """校验面板的**包名四处一致**（这是加载成败问题，不是风格问题）。
+
+    必须完全一致的四处：
+      ① package.json 的 name
+      ② cordis.patch.yml 里 loader entry 的 name
+      ③ 物理安装目录 node_modules/<name>
+      ④ profile dependencies 的 key（= name）
+
+    历史事故（2026-09-18）：③ 曾错放在 `node_modules/@deepseek-ai/`，
+    而 ①②④ 都是不带作用域的 `dsh-plugin-repo-manager`。Node 按 `①②` 里的名字
+    去 node_modules 找包，找不到 → DSH 加载期报：
+      invalid plugin, expect function or object with an "apply" method, received undefined
+    此前的「能用」只是 `npm install` 依 ④ 的 key 又补建了一个正确路径的链接，
+    node_modules 一被清理就暴露。**声明了依赖却要靠 npm 兜底才生效，本身就是缺陷。**
+    """
+    pkg_path = plugin / "package.json"
+    patch_path = plugin / "cordis.patch.yml"
+    if not (pkg_path.is_file() and patch_path.is_file()):
+        return
+
+    try:
+        pkg_name = json.loads(pkg_path.read_text(encoding="utf-8")).get("name", "")
+    except Exception:
+        return
+
+    text = patch_path.read_text(encoding="utf-8", errors="replace")
+    # 抓 loader entry 的 name（形如 `name: 'xxx'` / `name: "xxx"` / `name: xxx`）
+    m = re.search(r"^\s*name:\s*['\"]?([^'\"\s]+)['\"]?\s*$", text, re.MULTILINE)
+    if not m:
+        warn(f"{name}: cordis.patch.yml 里未找到 loader entry 的 name")
+        return
+    patch_name = m.group(1)
+
+    if patch_name == pkg_name:
+        ok(f"{name}: patch name 与 package.json name 一致（{pkg_name}）")
+    else:
+        bad(f"{name}: patch name='{patch_name}' ≠ package.json name='{pkg_name}'"
+            f" —— 加载器按前者找包，目录必须与之对应")
+
+    # 客户端 bundle 的注册 id 也应与包名一致
+    client_js = plugin / "client" / "client.js"
+    if client_js.is_file():
+        ctext = client_js.read_text(encoding="utf-8", errors="replace")
+        m_id = re.search(r'id:\s*["\']([^"\']+)["\']', ctext)
+        if m_id and m_id.group(1) != pkg_name:
+            warn(f"{name}: client 注册 id='{m_id.group(1)}' ≠ 包名 '{pkg_name}'")
+
 
 def check_install_scripts(repo: Path) -> None:
     scripts = repo / "scripts"
@@ -223,8 +293,74 @@ KNOWN_PUBLIC_KEYS = {
 }
 
 
+def check_install_targets(repo: Path) -> None:
+    """安装脚本的**落点目录名**必须等于包名（加载成败的第三个环节）。
+
+    判据：`scripts/install-to-profile.sh` 里
+      PROFILE_NODE_MODULES + PKG_NAME 拼出的目录，其最后一段必须 == PKG_NAME。
+    换句话说，包只能落在 `node_modules/<包名>`，不能落在别处
+    （例如 `node_modules/@deepseek-ai/<包名>` 而包名却不带作用域）。
+
+    这条检查是对 2026-09-18 事故的直接防线 —— 当时正是落点与包名不符，
+    导致 Node 解析不到包、DSH 报 "invalid plugin ... received undefined"。
+    """
+    sh = repo / "scripts" / "install-to-profile.sh"
+    if not sh.is_file():
+        warn("install-to-profile.sh 不存在（跳过落点一致性检查）")
+        return
+
+    text = sh.read_text(encoding="utf-8", errors="replace")
+
+    def grab(var: str) -> str | None:
+        m = re.search(rf"^{var}=(.+)$", text, re.MULTILINE)
+        return m.group(1).strip().strip('"').strip("'") if m else None
+
+    pkg_name = grab("PKG_NAME")
+    node_modules = grab("PROFILE_NODE_MODULES")
+    target = grab("TARGET_DIR")
+    if not (pkg_name and node_modules and target):
+        warn("无法从 install-to-profile.sh 解析 PKG_NAME/TARGET_DIR（跳过）")
+        return
+
+    # 实际拼装的路径（变量可能写成 $PROFILE_NODE_MODULES/$PKG_NAME）
+    expanded = target.replace("$PROFILE_NODE_MODULES", node_modules)
+    expanded = expanded.replace("${PROFILE_NODE_MODULES}", node_modules)
+    expanded = expanded.replace("$PKG_NAME", pkg_name).replace("${PKG_NAME}", pkg_name)
+    parts = [p for p in expanded.rstrip("/").split("/") if p]
+
+    # ⚠️ 判据不能只看「末段 == 包名」—— 错误的 @deepseek-ai/ 落点末段同样是包名，
+    #    那样检查会误报通过（实测过）。正确判据是**父目录必须正好是 node_modules**，
+    #    即路径形如 .../node_modules/<包名>。
+    if len(parts) >= 2 and parts[-1] == pkg_name and parts[-2] == "node_modules":
+        ok(f"install-to-profile.sh: 落点为 node_modules/{pkg_name}")
+    elif parts and parts[-1] != pkg_name:
+        bad(f"install-to-profile.sh: 落点末段 '{parts[-1]}' ≠ 包名 '{pkg_name}'"
+            f" —— Node 按包名解析，装到别处会加载失败")
+    else:
+        parent = parts[-2] if len(parts) >= 2 else "(无)"
+        bad(f"install-to-profile.sh: 落点父目录为 '{parent}'，应为 'node_modules'"
+            f" —— 包必须落在 node_modules/<包名>，否则解析不到")
+
+    # 依赖声明的 key 必须与包名一致（否则 npm 又会在别处建链接，掩盖问题）
+    if re.search(r"deps\[pkg_name\]\s*=", text):
+        dep_expr = re.search(r"deps\[pkg_name\]\s*=\s*(.+)$", text, re.MULTILINE)
+        expr = dep_expr.group(1) if dep_expr else ""
+        # 期望形如 "file:./node_modules/" + pkg_name  —— 不得出现作用域段
+        if re.search(r"@[A-Za-z0-9_.-]+/", expr):
+            bad(f"install-to-profile.sh: dependencies 值仍含作用域路径 → {expr.strip()}")
+        else:
+            ok("install-to-profile.sh: dependencies 走 node_modules/<包名>")
+
+
+# 需要可执行位的**源码脚本**后缀。
+# 刻意不含 `.js` —— 那是构建产物（`dist/index.js`、`client/client.js`），
+# 由打包器生成、从不直接执行，保持 644 才对。
+# `.mjs` 要算进来：`scripts/tests/*.mjs` 是可直接运行的测试脚本。
+EXEC_SUFFIXES = (".py", ".sh", ".mjs")
+
+
 def check_exec_bits(repo: Path) -> None:
-    """校验 git 索引里所有 .py / .sh 都是 100755（可执行）。
+    """校验 git 索引里所有源码脚本（.py/.sh/.mjs）都是 100755（可执行）。
 
     为什么必须查：本仓库 `core.filemode=false`（Windows 开发机），
     **文件系统上的可执行位不可靠**，只有 git 索引里的 mode 才是权威。
@@ -233,6 +369,8 @@ def check_exec_bits(repo: Path) -> None:
 
     实测踩坑（2026-09-18）：一次性新增 25 个脚本（jdgold + cloudflare-tunnel
     + 两个仓库脚本）全部是 644，**两套校验器都没报**。故补此检查。
+    同日又发现 `generate-client.mjs` 长期是 644，而 `panels/scripts/*.mjs`
+    是 755 —— 同为 `.mjs` 规则不统一，故把 `.mjs` 一并纳入。
 
     只查索引，不查工作区 —— 工作区的 chmod 在 Windows 上不生效。
     **副作用**：尚未 `git add` 的新文件不在索引里，因此不会被本检查覆盖。
@@ -258,7 +396,7 @@ def check_exec_bits(repo: Path) -> None:
         if len(fields) < 2:
             continue
         mode = fields[0]
-        if not path.endswith((".py", ".sh")):
+        if not path.endswith(EXEC_SUFFIXES):
             continue
         checked += 1
         if mode != "100755":
@@ -458,6 +596,9 @@ def main() -> int:
 
         print("\n2. 安装脚本安全性")
         check_install_scripts(repo)
+
+        print("\n2.5 面板安装落点与包名一致性")
+        check_install_targets(repo)
 
         print("\n3. 脚本可执行位")
         check_exec_bits(repo)

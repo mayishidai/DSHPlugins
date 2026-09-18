@@ -385,3 +385,16 @@ function sendJson(res, data) {
     });
     res.end(body);
 }
+/**
+ * 默认导出：与具名导出并存的**互操作兜底**。
+ *
+ * 事实：本模块编译后只有具名导出，`(await import(name)).default === undefined`。
+ * Cordis 加载器在拿到 ESM 命名空间后，有的实现取 `mod.default`、有的取具名的
+ * `mod.apply`。若加载器走 `.default` 分支，就会拿到 undefined 并报：
+ *   invalid plugin, expect function or object with an "apply" method, received undefined
+ *
+ * 两种写法同时提供，加载器走哪条分支都能拿到合法的插件对象：
+ *   - 取 `mod.apply`      → 命中具名导出
+ *   - 取 `mod.default`    → 命中本对象（{ name, apply } 正是 Cordis 认可的插件形态）
+ */
+export default { name, apply };

@@ -118,15 +118,51 @@ npm run build          # 产出 dist/index.js + client/client.js
 # 5. 写 cordis.patch.yml（Cordis 挂载配置）与 manifest.json。
 #    注意：cordis.patch.yml 里若写 ~ 路径，运行时会显式展开 homedir()
 #    （见 src/index.ts 的 expandHome），但优先写绝对路径。
+#
+#    ⚠️ 名字四处必须完全一致（加载成败问题，不是风格问题）：
+#       ① package.json 的 name
+#       ② cordis.patch.yml 里 loader entry 的 name
+#       ③ 物理目录 profile/node_modules/<name>
+#       ④ profile dependencies 的 key（= name）
+#    同时入口要**兼有具名与默认导出**，见下方说明。
 
 # 6. 校验 + 安装
 cd /vol1/1000/AI/DSHPlugin
 bash scripts/preflight.sh          # 会检查编译产物是否齐备
+python3 scripts/validate_repo.py   # 会校验名字一致性与 entry 指向
 make install-panel                  # 装到 DSH profile（不碰 DSH 源码）
 ```
 
 > 双半包规范见 DSH 源码 `packages/extensions/` 与 `docs/subsystems/extensions.zh.md`。
 > 安装脚本会**排除** `src/`、`scripts/`、`node_modules/`、`tsconfig*`，只复制产物。
+
+### ⚠️ 两个必须记住的约束
+
+**一、包名与落点必须严格对应 `node_modules/<name>`。**
+
+不要塞进 `@deepseek-ai/` 之类的作用域目录，除非 `package.json` 的 `name` 也带同样的作用域。
+挂载配置与 `dependencies` 用的都是包名，Node 按那个名字去 `node_modules/` 找——
+落点不对就**解析不到包**，DSH 启动时只会给你一句很容易误判的报错：
+
+```
+invalid plugin, expect function or object with an "apply" method, received undefined
+```
+
+**看到 "received undefined" 先查「有没有解析到这个包」，而不是「包里的 apply 对不对」**——
+解析失败与导出缺失的症状一模一样。`validate_repo.py` 会校验这两个环节
+（`check_panel_names` 查 ①②，`check_install_targets` 查 ③）。
+
+**二、入口应同时提供具名导出与默认导出。**
+
+```ts
+export const name = '<包名>'
+export async function apply(ctx) { /* ... */ }
+export default { name, apply }   // ← 互操作兜底
+```
+
+原因：编译产物是 ESM 命名空间，`(await import(name)).default` 天然是 `undefined`。
+不同 Cordis 加载器实现有的取 `mod.apply`、有的取 `mod.default`；
+只提供一种时，走另一条分支的加载器就会拿到 `undefined`，报出与「解析失败」**完全相同**的错误。
 
 ---
 
@@ -144,20 +180,28 @@ make install-panel                  # 装到 DSH profile（不碰 DSH 源码）
 - [ ] 目录名 = SKILL.md 的 `name`，且为 kebab-case（**外部技能必须平铺，不能套父目录**）
 - [ ] SKILL.md 首行为 `---`，frontmatter 含 `name` 和 `description`
 - [ ] 清单一致：manifest.json 的 `name` 与目录名一致（有 manifest 时）
-- [ ] scripts 里的脚本有可执行权限（`git add --chmod=+x`）
+- [ ] 源码脚本有可执行权限（`git add --chmod=+x`）—— 覆盖 `.py` / `.sh` / `.mjs`
       —— 已在 `validate_repo.py` 的 `check_exec_bits` 里**自动校验**（查 git 索引，
       因为本仓库 `core.filemode=false`，Windows 工作区的权限位不可靠）。
       ⚠️ 从 zip 解压或从 Windows 复制**会丢可执行位**，必须显式补：
       `git add --chmod=+x <文件>`
+      ⚠️ 构建产物 `.js`（`dist/index.js`、`client/client.js`）**不在此列**，保持 644。
 - [ ] 面板型：`dist/index.js` 与 `client/client.js` **已入库**，`main` 指向 `dist/index.js`
 - [ ] 面板型：`cordis.patch.yml` 存在；`package.json` 的 `files` 含 `dist`
-- [ ] 跑三套校验（均只读）：
+- [ ] 面板型：**名字四处一致** —— `package.json` 的 `name` = `cordis.patch.yml` 的 `name`
+      = `dependencies` 的 key = 物理目录 `node_modules/<name>`
+      （③④ 由 `validate_repo.py` 的 `check_install_targets` 校验）
+- [ ] 面板型：入口**兼有** `export function apply` 与 `export default { name, apply }`
+- [ ] 面板型：`manifest.json` 的 `entry.server` 指向 `dist/index.js`（**不能指向 `src/*.ts`**
+      —— 安装时 `src/` 不会被复制）
+- [ ] 跑全套校验（均只读）：
 
   ```bash
   cd /vol1/1000/AI/DSHPlugin
   bash scripts/preflight.sh                    # 安装前自检
-  python3 scripts/validate_repo.py             # 结构 / 契约校验
+  python3 scripts/validate_repo.py             # 结构 / 契约 / 名字一致性
   python3 scripts/tests/test_cred_parity.py    # 凭据粗筛一致性守卫
+  node scripts/tests/test-panel-resolve.mjs    # 面板可加载性（仅面板型相关）
   ```
 
   或一条命令跑全套：`make verify`
@@ -177,5 +221,5 @@ make install-panel                  # 装到 DSH profile（不碰 DSH 源码）
       并在 `SOURCE.md` 里把这处改动**枚举出来**（只改 mode、内容未动）。
 - [ ] 引入 zip 分发包：包内置默认凭据若走豁免，`KNOWN_PUBLIC_KEYS`（Python）与
       `KNOWN_PUBLIC_KEYS_RE`（Bash）**两处已同步**，且一致性测试仍通过
-- [ ] **动过凭据判据的话**：`make verify` 三套全绿（两套实现判定必须一致，
+- [ ] **动过凭据判据的话**：`make verify` 四套全绿（两套实现判定必须一致，
       否则其中一套失去信号价值）

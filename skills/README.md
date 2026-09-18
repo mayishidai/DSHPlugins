@@ -23,13 +23,14 @@ skills/<name>/
 - kebab-case：`^[a-z0-9]+(?:-[a-z0-9]+)*$`（不能有中文、大写、下划线）
 - **必须平铺**：`skills/<name>/` 只允许一层。套了父目录（如 `skills/vendor/<name>/`）
   DSH 就扫不到 —— 扫描器按 `skills/*/SKILL.md` 匹配。
-- 自校验（三套，均只读）：
+- 自校验（四套，均只读）：
 
   ```bash
   cd /vol1/1000/AI/DSHPlugin
   python3 scripts/validate_repo.py      # 仓库结构与契约
   bash scripts/preflight.sh             # 安装前自检
   python3 scripts/tests/test_cred_parity.py   # 凭据粗筛：两套实现判定必须一致
+  node scripts/tests/test-panel-resolve.mjs   # 面板可加载性（与技能无关，一并跑）
   ```
 
   > 第三条是**一致性守卫**。凭据粗筛在 Python 与 Bash 里各有一份实现，

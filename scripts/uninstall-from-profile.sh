@@ -11,10 +11,13 @@ set -euo pipefail
 #   PROFILE_DIR=/path/to/profile bash scripts/uninstall-from-profile.sh
 
 PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}"
-PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules/@deepseek-ai"
+PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules"
 PROFILE_PACKAGE_JSON="$PROFILE_DIR/package.json"
 PKG_NAME="dsh-plugin-repo-manager"
 TARGET_DIR="$PROFILE_NODE_MODULES/$PKG_NAME"
+# 遗留的错误落点：2026-09-18 之前装到这里（与包名不符，导致加载失败）。
+# 卸载时一并清掉，避免残留一份永远不会被解析、却可能被误认为「已安装」的副本。
+LEGACY_DIR="$PROFILE_NODE_MODULES/@deepseek-ai/$PKG_NAME"
 
 # 路径规范化：Git Bash / Cygwin 下 python3 是原生程序，认不出 MSYS 路径。
 to_native() {
@@ -34,13 +37,17 @@ if [ ! -d "$PROFILE_DIR" ]; then
     exit 1
 fi
 
-# 1. 删除插件目录
+# 1. 删除插件目录（含历史错误落点）
 echo "1. 删除插件目录..."
 if [ -d "$TARGET_DIR" ]; then
     rm -rf "$TARGET_DIR"
     echo "   ✓ 已删除 $TARGET_DIR"
 else
     echo "   ✓ 插件目录不存在，跳过"
+fi
+if [ -d "$LEGACY_DIR" ]; then
+    rm -rf "$LEGACY_DIR"
+    echo "   ✓ 已删除遗留的错误落点 $LEGACY_DIR"
 fi
 
 # 2. 还原 package.json

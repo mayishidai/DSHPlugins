@@ -90,15 +90,18 @@ check: ## 校验仓库中所有插件（只读）
 		fi; \
 	done
 
-verify: ## 跑仓库侧全部校验（Python 校验 + Bash 自检 + 一致性回归）
-	@echo "== 1/3 仓库结构校验（validate_repo.py）=="
+verify: ## 跑仓库侧全部校验（Python 校验 + Bash 自检 + 一致性回归 + 面板可加载性）
+	@echo "== 1/4 仓库结构校验（validate_repo.py）=="
 	@python3 scripts/validate_repo.py || exit 1
 	@echo ""
-	@echo "== 2/3 安装前自检（preflight.sh）=="
+	@echo "== 2/4 安装前自检（preflight.sh）=="
 	@bash scripts/preflight.sh || exit 1
 	@echo ""
-	@echo "== 3/3 凭据粗筛一致性回归（两套实现判定必须一致）=="
+	@echo "== 3/4 凭据粗筛一致性回归（两套实现判定必须一致）=="
 	@python3 scripts/tests/test_cred_parity.py || exit 1
+	@echo ""
+	@echo "== 4/4 面板可加载性（按包名真实解析 + 导出形态）=="
+	@node scripts/tests/test-panel-resolve.mjs || exit 1
 	@echo ""
 	@echo "✓ 全部校验通过"
 

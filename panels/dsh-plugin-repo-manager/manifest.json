@@ -11,7 +11,7 @@
   },
   "keywords": ["dsh", "plugin-repo", "settings-panel", "cordis", "update"],
   "entry": {
-    "server": "src/index.ts",
+    "server": "dist/index.js",
     "client": "client/client.js",
     "patch": "cordis.patch.yml"
   },

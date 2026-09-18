@@ -9,8 +9,14 @@ DSHPlugin/
 ├── skills/   技能型能力（SKILL.md）      → 复制到 $DSH_HOME/skills/
 ├── agents/   智能体 / 专家角色           → 按目标框架的 agent 机制加载
 ├── mcps/     MCP 服务配置（不含凭据）    → 合并进 ~/.workbuddy/mcp.json
-└── panels/   运行时面板插件（双半包）    → 复制到 dsh-runtime/node_modules/@deepseek-ai/
+└── panels/   运行时面板插件（双半包）    → 复制到 profile/node_modules/<包名>/
 ```
+
+> ⚠️ 面板的落点必须**正好是** `node_modules/<package.json 的 name>`，
+> 不能塞进 `@deepseek-ai/` 之类的作用域目录 —— 挂载配置与 `dependencies` 用的都是
+> 不带作用域的包名，Node 按那个名字去 `node_modules/` 找包，落点不对就**加载失败**
+> （症状：`invalid plugin, expect function or object with an "apply" method, received undefined`，
+> 因为模块根本解析不到）。四处名字必须一致，见 `docs/FAQ.md` Q0 与安装脚本头部说明。
 
 > ⚠️ 类型目录是**安装与管理面板扫描的边界**：`dsh-plugin-repo-manager` 的 `repoDir`
 > 指向 `skills/`。新增技能要落在 `skills/` 下，否则管理面板看不到。

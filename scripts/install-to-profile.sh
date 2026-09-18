@@ -29,9 +29,27 @@ to_native() {
     fi
 }
 
-# DSH profile 目录。可用环境变量覆盖，便于在不同部署上使用。
+# ⚠️ 落点必须与「包名」严格对应：node_modules/<package.json 的 name>
+#
+# 这不是风格问题，是**加载成败**问题。四处名字必须完全一致：
+#   ① package.json 的 name           dsh-plugin-repo-manager
+#   ② cordis.patch.yml 的 name       dsh-plugin-repo-manager
+#   ③ profile package.json 的
+#      dependencies key               dsh-plugin-repo-manager
+#   ④ 物理目录                        node_modules/dsh-plugin-repo-manager
+#
+# 历史事故（2026-09-18）：物理目录曾错放在 `node_modules/@deepseek-ai/`，
+# 而 ①②③ 全是不带作用域的名字 → Node 解析 `dsh-plugin-repo-manager` 时
+# **找不到包**，DSH 加载期报：
+#   invalid plugin, expect function or object with an "apply" method, received undefined
+# 此前能跑，只是因为 `npm install` 依 dependencies 的 key 又建了一个
+# `node_modules/dsh-plugin-repo-manager` 链接；`node_modules` 被清理后就暴露了。
+# 换言之：**明明声明了依赖，却要额外靠 npm 兜底才生效** —— 本身就是设计缺陷。
+#
+# 另外：dependencies 的 key 就是包名，npm 本就该把它装在 node_modules/<key>，
+# 预先放到 @deepseek-ai/ 与自己的依赖声明自相矛盾。所以落点必须是不带作用域的。
 PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}"
-PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules/@deepseek-ai"
+PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules"
 PKG_NAME="dsh-plugin-repo-manager"
 TARGET_DIR="$PROFILE_NODE_MODULES/$PKG_NAME"
 
@@ -78,6 +96,16 @@ mkdir -p "$TARGET_DIR"
 rm -rf "$TARGET_DIR"
 mkdir -p "$TARGET_DIR"
 
+# 清理历史错误落点（曾装到 @deepseek-ai/ 下，与包名不符 → 加载失败）。
+# 留着它不会被解析，但会让人误以为「已安装」，且与新副本重复。
+LEGACY_DIR="$PROFILE_NODE_MODULES/@deepseek-ai/$PKG_NAME"
+if [ -d "$LEGACY_DIR" ]; then
+    rm -rf "$LEGACY_DIR"
+    echo "   ✓ 已清理历史错误落点 $LEGACY_DIR"
+    # 该作用域目录若已空则一并移除
+    rmdir "$PROFILE_NODE_MODULES/@deepseek-ai" 2>/dev/null || true
+fi
+
 (
     cd "$PLUGIN_SRC"
     tar -cf - \
@@ -110,8 +138,9 @@ with open(pkg_path, 'r', encoding='utf-8') as f:
     data = json.load(f)
 
 # dependencies：用 file: 指向 profile 内已复制好的目录
+# 注意 key 必须与物理目录名一致（见文件头部的四处一致性说明）
 deps = data.setdefault('dependencies', {})
-deps[pkg_name] = "file:./node_modules/@deepseek-ai/" + pkg_name
+deps[pkg_name] = "file:./node_modules/" + pkg_name
 
 # dsh.profile.bundles：注册为运行时 bundle
 dsh = data.setdefault('dsh', {})

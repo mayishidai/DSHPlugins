@@ -24,7 +24,7 @@ panels/<name>/
 |---|---|---|
 | 机制 | `dsh-skill-filesystem` 扫描 | DSH extensions（Cordis 双半包） |
 | 形态 | 指令型能力 | 有 UI 的运行时扩展 |
-| 安装 | 复制到 `$DSH_HOME/skills/` | 复制到 `dsh-runtime/node_modules/@deepseek-ai/` |
+| 安装 | 复制到 `$DSH_HOME/skills/` | 复制到 profile 的 `node_modules/<包名>/`（**必须与包名一致**） |
 | 生效 | 自动发现，通常无需重启 | 需重启 DSH + 配 `cordis.patch.yml` |
 
 ## 当前收录

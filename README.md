@@ -52,18 +52,25 @@
 ### 安装前自检（推荐）
 
 ```bash
-bash scripts/preflight.sh              # 检查产物是否齐备、脚本是否会污染 DSH
-python3 scripts/validate_repo.py       # 结构 + 契约校验（零依赖）
+bash scripts/preflight.sh                   # 检查产物是否齐备、脚本是否会污染 DSH
+python3 scripts/validate_repo.py            # 结构 + 契约 + 名字一致性校验（零依赖）
 python3 scripts/tests/test_cred_parity.py   # 凭据粗筛：两套实现判定必须一致
+node scripts/tests/test-panel-resolve.mjs   # 面板可加载性（按包名真实解析）
 ```
 
-三者都会在缺失编译产物、或 `main` 指向 `.ts` 时报 FAIL。
+四者都会在缺失编译产物、或 `main` 指向 `.ts` 时报 FAIL。
+一条命令跑全套：`make verify`。
 
-> 第三条是**一致性守卫**。凭据粗筛在 Python 与 Bash 里各写了一份实现，
+> 第 3 条是**一致性守卫**。凭据粗筛在 Python 与 Bash 里各写了一份实现，
 > 曾因 Bash 版缺 `-i`、且关键字不允许前缀，漏判 jdgold 的 API Key ——
 > 同一份代码，两套校验给出相反结论。该测试现读两份**生产源码**的
 > 正则与调用标志，用同一份语料比对判定，任何漂移立即失败。
-> 也可以一条命令跑全套：`make verify`。
+>
+> 第 4 条防的是另一类事故：面板装了却加载不起来，报
+> `invalid plugin, expect function or object with an "apply" method, received undefined`。
+> 该测试在临时目录里搭出完整的 profile 布局，**用加载器实际使用的名字真实 import 一次**，
+> 把「包名与落点不符导致解析失败」和「入口缺少 default 导出」这两个症状相同、
+> 根因不同的缺陷分别检出。详见 [`docs/FAQ.md`](docs/FAQ.md) 的 Q4b。
 
 ### 1. 安装技能型插件（skills/）
 
@@ -89,7 +96,9 @@ bash scripts/install-to-profile.sh
 **这个脚本只写入 DSH 的 profile 目录**（用户数据区
 `dsh-data/profiles/web`），做三件事：
 
-1. 复制**编译产物**（`dist/` + `client/` + `cordis.patch.yml`）到 profile 的 `node_modules`
+1. 复制**编译产物**（`dist/` + `client/` + `cordis.patch.yml`）到 profile 的
+   `node_modules/dsh-plugin-repo-manager/`（**必须与包名一致**，否则 DSH 解析不到该包，
+   启动时报 `invalid plugin, expect function or object with an "apply" method, received undefined`）
 2. 用 python3 的 JSON 库安全更新 profile `package.json`
    （`dependencies` + `dsh.profile.bundles`）
 3. 备份原 `package.json`
@@ -166,7 +175,9 @@ DSHPlugins/
 │   ├── install-plugin-repo.sh      #   已废弃，执行即退出并提示新方式
 │   └── tests/
 │       ├── test_cred_parity.py     #   凭据粗筛一致性守卫（两套实现判定必须一致）
-│       └── cred_parity_corpus.txt  #     该测试的语料
+│       ├── cred_parity_corpus.txt  #     该测试的语料
+│       ├── test-panel-resolve.mjs  #   面板可加载性（按包名真实解析 + 导出形态）
+│       └── panel-resolve-probe.mjs #     其探针（在模拟 profile 里执行 import）
 ├── README.md
 └── Makefile
 ```

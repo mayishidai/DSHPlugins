@@ -67,10 +67,16 @@ dsh --profile web &
 ```yaml
 - insert:
     - id: plugin-repo
-      name: '@deepseek-ai/dsh-plugin-repo-manager'
+      name: 'dsh-plugin-repo-manager'
       config:
         repoDir: '/path/to/your/plugins'
 ```
+
+> ⚠️ `name` 必须与 `package.json` 的 `name`、profile `dependencies` 的 key、
+> 以及物理目录 `node_modules/<name>` **四处完全一致**。
+> 曾因把包装在 `node_modules/@deepseek-ai/` 下而这里写不带作用域的名字，
+> 导致 DSH 报 `invalid plugin, expect function or object with an "apply" method,
+> received undefined`（Node 根本解析不到这个包）。
 
 ## 与官方实现的区别
 
@@ -86,7 +92,11 @@ dsh --profile web &
 由于 DSH 重启可能清除 `node_modules`，建议：
 
 1. 将安装脚本加入 DSH 启动流程
-2. 或使用 `persist-plugin-repo.sh` 自动恢复
+2. 或重跑 `bash scripts/install-to-profile.sh`（幂等，可重复执行）恢复
+
+> 安装脚本已按 `dependencies` 的 key（= 包名）把插件放到
+> `node_modules/dsh-plugin-repo-manager`，与包名严格对应，
+> 所以即使 `npm install` 没跑过也能被解析到 —— 不再依赖 npm 额外建链接。
 
 ```bash
 # 添加自动恢复脚本
