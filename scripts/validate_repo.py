@@ -351,6 +351,146 @@ def check_install_targets(repo: Path) -> None:
         else:
             ok("install-to-profile.sh: dependencies 走 node_modules/<包名>")
 
+    # 安装类文档不得把「带作用域路径」写成安装目标。
+    # 2026-09-18 实测：插件 README 与 INSTALL.md 都曾写
+    # `node_modules/@deepseek-ai/<包名>/` 作为安装目的地，正是错的落点 ——
+    # 文档会把人直接带到那个状态，所以和脚本一样要守。
+    # 只扫这两份「会指导操作」的文档；历史记录（FINAL.md / IMPLEMENTATION.md）
+    # 与脚本内的 legacy 清理注释豁免（它们提到该路径是**为了说明它错**）。
+    wrong_target = f"node_modules/@deepseek-ai/{pkg_name}"
+    doc_dir = repo / "panels" / pkg_name
+    dirty: list[str] = []
+    for doc in ("INSTALL.md", "README.md"):
+        p = doc_dir / doc
+        if not p.is_file():
+            continue
+        if wrong_target in p.read_text(encoding="utf-8", errors="replace"):
+            dirty.append(f"panels/{pkg_name}/{doc}")
+    if dirty:
+        bad(f"{len(dirty)} 份安装文档把带作用域路径写成了安装目标")
+        for rel in dirty:
+            print(f"         {rel}  ← 含 {wrong_target}")
+        print(f"         应写成 node_modules/{pkg_name}/（不带作用域）")
+    else:
+        ok("安装文档的落点写法正确（不带作用域）")
+
+
+CANONICAL_INSTALLER = "scripts/install-to-profile.sh"
+
+# 允许携带落点定义的**成对**文件：安装脚本 + 它的卸载对手。
+# 卸载必须算出与安装完全相同的落点（否则删不掉/删错），所以无法合并成一个。
+# 代价是「同一事实存在两处」→ 必须配一致性守卫（见 check_install_uninstall_parity）。
+ALLOWED_TARGET_OWNERS = {
+    CANONICAL_INSTALLER,
+    "scripts/uninstall-from-profile.sh",
+}
+
+# 判据：出现这个变量赋值即视为「自己实现了一遍 profile 落点」。
+TARGET_VAR_RE = re.compile(r"^\s*PROFILE_NODE_MODULES\s*=", re.MULTILINE)
+
+
+def check_install_impl_uniqueness(repo: Path) -> None:
+    """「安装到 profile」的落点逻辑**只允许一处实现**（卸载对手除外）。
+
+    判据：除 `ALLOWED_TARGET_OWNERS` 里的文件外，任何 `.sh` 都不得给
+    `PROFILE_NODE_MODULES` 赋值。
+
+    为什么需要这条：
+      这里曾有两份实现 —— 仓库根的 `scripts/install-to-profile.sh` 和
+      **插件内**的 `panels/dsh-plugin-repo-manager/scripts/install.sh`。
+      两者必然漂移：插件内那份写的是 `node_modules/@deepseek-ai/<包名>`，
+      而包名不带作用域 → Node 解析不到 → DSH 报
+        invalid plugin, expect function or object with an "apply" method,
+        received undefined
+      更糟的是 `INSTALL.md` 把它当「安装步骤 1」推荐，等于持续再造这个错误状态。
+
+      注意：`check_install_targets` 只检查**那一个文件内部**的落点是否自洽，
+      **查不出「同一逻辑存在第二份」** —— 所以必须另加本条结构性检查。
+      （这正是「实现只放一处」原则需要工具兜住的地方：靠人眼必然漏。）
+    """
+    offenders: list[str] = []
+    scanned = 0
+    for sh in sorted(repo.rglob("*.sh")):
+        rel = sh.relative_to(repo).as_posix()
+        if rel.startswith(".git/") or rel.startswith(".workbuddy/"):
+            continue
+        if rel in ALLOWED_TARGET_OWNERS:
+            continue
+        scanned += 1
+        try:
+            text = sh.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if TARGET_VAR_RE.search(text):
+            offenders.append(rel)
+
+    if offenders:
+        bad(f"{len(offenders)} 个脚本重复实现了 profile 落点"
+            f"（只允许 {CANONICAL_INSTALLER} 及其卸载对手）")
+        for rel in offenders[:8]:
+            print(f"         {rel}  ← 含 PROFILE_NODE_MODULES= 赋值")
+        print("         改法：改为**转发桩**（exec 到唯一实现），不要在第二处重写落点逻辑。")
+    else:
+        ok(f"profile 落点逻辑只有一处实现（另扫描 {scanned} 个 .sh）")
+
+
+# 从某个脚本里抓出落点三元组（用于比对安装/卸载是否一致）
+_LOC_RE = {
+    "PROFILE_DIR": re.compile(r'^PROFILE_DIR="\$\{PROFILE_DIR:-([^}]*)\}"', re.MULTILINE),
+    "NODE_MODULES": re.compile(r'^PROFILE_NODE_MODULES=(.+)$', re.MULTILINE),
+    "PKG_NAME": re.compile(r'^PKG_NAME=(.+)$', re.MULTILINE),
+    "TARGET_DIR": re.compile(r'^TARGET_DIR=(.+)$', re.MULTILINE),
+}
+
+
+def _extract_targets(path: Path) -> dict[str, str] | None:
+    """抽出落点定义四元组；缺任何一个返回 None。"""
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    out: dict[str, str] = {}
+    for key, rx in _LOC_RE.items():
+        m = rx.search(text)
+        if not m:
+            return None
+        out[key] = m.group(1).strip().strip('"').strip("'")
+    return out
+
+
+def check_install_uninstall_parity(repo: Path) -> None:
+    """安装与卸载脚本的落点定义必须**逐字一致**。
+
+    这两个文件天然要各自算一遍落点（一个写、一个删），是不可避免的「两处」。
+    按本仓库约定（**两处都有的项必须配一致性守卫**），这里直接比对四元组：
+    `PROFILE_DIR` 默认值 / `PROFILE_NODE_MODULES` / `PKG_NAME` / `TARGET_DIR`。
+
+    漂移的后果很隐蔽：装到 A、卸载时去删 B —— 删不干净，或（更糟）
+    在错误的目录上执行 `rm -rf`。这条检查是那类事故的直接防线。
+    """
+    inst = repo / CANONICAL_INSTALLER
+    unin = repo / "scripts" / "uninstall-from-profile.sh"
+    if not (inst.is_file() and unin.is_file()):
+        warn("install / uninstall 脚本不全（跳过落点一致性比对）")
+        return
+
+    a = _extract_targets(inst)
+    b = _extract_targets(unin)
+    if a is None or b is None:
+        warn("无法从 install / uninstall 解析落点四元组（跳过比对）")
+        return
+
+    drift = {k: (a[k], b[k]) for k in a if a.get(k) != b.get(k)}
+    if drift:
+        bad(f"install 与 uninstall 的落点定义漂移（{len(drift)} 项）")
+        for k, (x, y) in drift.items():
+            print(f"         {k}:")
+            print(f"           install   = {x}")
+            print(f"           uninstall = {y}")
+    else:
+        ok("install / uninstall 落点定义一致"
+           f"（PKG_NAME={a['PKG_NAME']}，落点父目录=node_modules）")
+
 
 # 需要可执行位的**源码脚本**后缀。
 # 刻意不含 `.js` —— 那是构建产物（`dist/index.js`、`client/client.js`），
@@ -599,6 +739,12 @@ def main() -> int:
 
         print("\n2.5 面板安装落点与包名一致性")
         check_install_targets(repo)
+
+        print("\n2.6 安装逻辑「只放一处」")
+        check_install_impl_uniqueness(repo)
+
+        print("\n2.7 安装 / 卸载落点一致性")
+        check_install_uninstall_parity(repo)
 
         print("\n3. 脚本可执行位")
         check_exec_bits(repo)

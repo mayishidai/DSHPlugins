@@ -14,7 +14,9 @@ panels/<name>/
 ├── cordis.patch.yml        # Cordis 配置（含 repoDir 等运行时配置）
 ├── package.json
 ├── generate-client.mjs     # client bundle 生成脚本
-├── scripts/install.sh      # 安装到 DSH runtime
+├── scripts/
+│   ├── install.sh          # 转发桩 → 仓库根 scripts/install-to-profile.sh（唯一实现）
+│   └── test-*.mjs          # 插件自测
 └── README.md / INSTALL.md / IMPLEMENTATION.md / FINAL.md
 ```
 

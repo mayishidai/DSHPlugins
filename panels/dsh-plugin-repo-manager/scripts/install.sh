@@ -1,61 +1,41 @@
 #!/bin/bash
 set -euo pipefail
 
-# 安装 dsh-plugin-repo-manager 到 DSH profile（用户数据区）。
+# 【已改为转发桩】本文件不再自己实现安装逻辑。
 #
-# 设计原则：
-#   - 只写入 DSH 的 profile 目录，绝不修改 DSH 运行时源码；
-#   - 不复制 node_modules / src / 构建脚本，避免递归自包含与体积膨胀；
-#   - 幂等，可重复执行。
+# 为什么：这里曾**另写了一份**「把插件装到 DSH profile」的实现，与
+# `scripts/install-to-profile.sh` 各存一份。两份必然漂移 —— 实测就是：
+# 本文件把落点写成 `node_modules/@deepseek-ai/<包名>`，而包名（package.json 的
+# name / cordis.patch.yml 的 name / profile dependencies 的 key）全是不带作用域的
+# `dsh-plugin-repo-manager` → Node 解析不到这个包，DSH 启动报：
 #
-# 用法:
-#   bash scripts/install.sh
-#   PROFILE_DIR=/path/to/profile bash scripts/install.sh
+#   failed to apply loader entry … (dsh-plugin-repo-manager):
+#   invalid plugin, expect function or object with an "apply" method, received undefined
+#
+# 而更糟的是：本文件还被 `INSTALL.md` 当成「安装步骤 1」推荐，并出现在一份
+# 每次登录都会跑的自动恢复片段里 —— 等于**持续把这个错误落点再造出来**。
+#
+# 按本仓库的「实现只放一处」原则（见 .workbuddy/memory/MEMORY.md），
+# 唯一实现留在 `scripts/install-to-profile.sh`，本文件只转发。
+#
+# 用法不变：
+#   bash panels/dsh-plugin-repo-manager/scripts/install.sh
+#   PROFILE_DIR=/path/to/profile bash panels/dsh-plugin-repo-manager/scripts/install.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_SRC="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_SCRIPTS="$(cd "$SCRIPT_DIR/../../.." && pwd)/scripts"
 
-PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}"
-PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules/@deepseek-ai"
-PKG_NAME="dsh-plugin-repo-manager"
-TARGET_DIR="$PROFILE_NODE_MODULES/$PKG_NAME"
-REPO_SCRIPTS="$(cd "$PLUGIN_SRC/../.." && pwd)/scripts"
+echo "[deprecated] 本脚本已改为转发桩，实际安装由仓库根脚本执行：" >&2
+echo "             scripts/install-to-profile.sh" >&2
+echo "" >&2
 
-echo "=== 安装 $PKG_NAME ==="
-
-if [ ! -d "$PROFILE_DIR" ]; then
-    echo "ERROR: DSH profile 不存在: $PROFILE_DIR" >&2
-    echo "请用 PROFILE_DIR=... 指定正确路径。" >&2
+if [ ! -f "$REPO_SCRIPTS/install-to-profile.sh" ]; then
+    echo "ERROR: 找不到唯一实现 $REPO_SCRIPTS/install-to-profile.sh" >&2
+    echo "       本文件（插件内的 scripts/install.sh）不在安装载荷里，" >&2
+    echo "       只在仓库内有效；请从仓库根执行：" >&2
+    echo "           bash scripts/install-to-profile.sh" >&2
     exit 1
 fi
 
-# 编译产物必须存在——这是「编译好直接用」的前提
-for f in "dist/index.js" "client/client.js" "cordis.patch.yml"; do
-    if [ ! -f "$PLUGIN_SRC/$f" ]; then
-        echo "ERROR: 缺少 $f" >&2
-        echo "请先在仓库执行 npm run build（服务端需编译为 JS）" >&2
-        exit 1
-    fi
-done
-
-echo "复制运行文件 → $TARGET_DIR"
-rm -rf "$TARGET_DIR"
-mkdir -p "$TARGET_DIR"
-(
-    cd "$PLUGIN_SRC"
-    tar -cf - \
-        --exclude='./node_modules' \
-        --exclude='./src' \
-        --exclude='./scripts' \
-        --exclude='./tsconfig.json' \
-        --exclude='./tsconfig.build.json' \
-        --exclude='./generate-client.mjs' \
-        dist client cordis.patch.yml manifest.json package.json README.md 2>/dev/null \
-        | (cd "$TARGET_DIR" && tar -xf -)
-)
-echo "   ✓ 已复制（dist/ + client/ + 配置）"
-
-echo ""
-echo "下一步：注册到 profile 并重启 DSH。推荐直接用仓库根的脚本（会自动注册）："
-echo "    bash $REPO_SCRIPTS/install-to-profile.sh"
-echo ""
+# exec 转发：环境变量（如 PROFILE_DIR）与退出码原样穿透
+exec bash "$REPO_SCRIPTS/install-to-profile.sh" "$@"

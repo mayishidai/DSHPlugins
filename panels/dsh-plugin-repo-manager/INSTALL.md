@@ -2,67 +2,85 @@
 
 ## 概述
 
-这是一个**可插拔的 DSH 插件**，无需编译源码，可直接安装到 DSH runtime 中使用。
+一个**可插拔的 DSH 面板插件**（Cordis 双半包：服务端 half + 浏览器 half）。
+已随仓库提供**编译好的产物**，目标机（NAS）不需要 npm、不需要编译，安装 = 纯复制。
 
 ## 目录结构
 
 ```
-DSHPlugin/
-├── skills/                         # 技能型插件
+DSHPlugins/
+├── skills/                                  # 技能型插件（DSH 直接扫）
 ├── panels/
-│   └── dsh-plugin-repo-manager/    # 面板插件包（可插拔）
+│   └── dsh-plugin-repo-manager/
 │       ├── src/
-│       │   ├── index.ts            # Host 入口
-│       │   └── client/
-│       │       ├── index.ts        # Client 注册
-│       │       ├── locales.ts      # 国际化
-│       │       └── PluginRepoTab.tsx  # React 组件
+│       │   ├── index.ts                     # Host（服务端）入口
+│       │   ├── client/
+│       │   │   ├── index.tsx                # Client 注册（含 JSX，必须是 .tsx）
+│       │   │   ├── PluginRepoPanel.tsx      # React 组件
+│       │   │   └── locales.ts               # 国际化
+│       │   └── types/host.d.ts              # DSH 宿主类型桩
+│       ├── dist/index.js                    # ✅ 编译产物，已入库
+│       ├── client/client.js                 # ✅ 客户端 bundle，已入库
 │       ├── scripts/
-│       │   ├── install.sh          # 安装脚本
-│       │   └── wrap-client.mjs     # 客户端打包
-│       ├── cordis.patch.yml        # Cordis 配置
+│       │   ├── install.sh                   # 转发桩 → 仓库根的同名脚本
+│       │   ├── test-isnewer.mjs             # 版本比较 23 例
+│       │   ├── test-install-update.mjs      # 安装/更新流程 24 例
+│       │   └── test-paths.mjs               # 路径处理 14 例
+│       ├── generate-client.mjs              # 生成 client/client.js
+│       ├── cordis.patch.yml                 # Cordis 加载器配置
+│       ├── manifest.json                    # 仓库侧清单（entry.server/client/patch）
 │       ├── package.json
-│       └── tsconfig.json
-├── deepseek-harness/               # 官方 DSH 源码（参考用）
-└── ...
+│       ├── tsconfig.json / tsconfig.build.json
+│       └── README.md / SKILL.md / INSTALL.md
+└── scripts/                                 # 仓库级脚本（安装/校验/同步）
 ```
 
 ## 安装步骤
 
-### 1. 复制插件到 DSH runtime
+### 1. 装到 DSH profile
+
+**只用这一个脚本**（在 NAS 上、仓库根执行）：
 
 ```bash
-bash /vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager/scripts/install.sh
+cd /vol1/1000/AI/DSHPlugin
+bash scripts/install-to-profile.sh
 ```
+
+它做三件事：把 `dist/` + `client/` + 配置复制到 `profile/node_modules/<包名>/`、
+用 python3 JSON 库注册 profile `package.json`（`dependencies` + `dsh.profile.bundles`）、
+备份原 `package.json`。**幂等**，可重复执行；并会清理历史错误落点。
+
+> ⚠️ 不要用 `panels/dsh-plugin-repo-manager/scripts/install.sh` ——
+> 它已改为**转发桩**，本身不实现安装逻辑（原因见下「为什么只有一个安装脚本」）。
+
+指定别的 profile：`PROFILE_DIR=/path/to/profile bash scripts/install-to-profile.sh`
 
 ### 2. 重启 DSH
 
-```bash
-# 停止当前 DSH
-kill $(cat /vol2/@appdata/deepseek.harness/harness.pid)
-
-# 等待重启，或手动启动
-dsh --profile web &
-```
+重启方式取决于你的部署（fnOS 应用中心重启该应用，或按进程管理方式重启）。
+DSH 默认监听 `2298`。
 
 ### 3. 验证
 
-打开 `http://127.0.0.1:2298/` → 设置 → 插件 → 「我的插件仓库」
+打开 `http://127.0.0.1:2298/` → 设置 → 插件 → 「我的插件仓库」。
 
-## 功能特性
+若启动时仍报
+`invalid plugin, expect function or object with an "apply" method, received undefined`，
+见 `docs/FAQ.md` 的 **Q4b**（三步排查）。
 
-| 功能 | 说明 |
-|------|------|
-| 列出插件 | 扫描仓库目录，显示所有插件 |
-| 安装状态 | 标记已安装/未安装 |
-| 卸载插件 | 勾选后点击卸载，带确认对话框 |
-| 安全守卫 | kebab-case 校验 + 路径穿越防护 |
+## 为什么只有一个安装脚本
+
+这里曾**有两份**「把插件装到 profile」的实现：仓库根的 `scripts/install-to-profile.sh`
+和插件内的 `scripts/install.sh`。两份必然漂移 —— 实测就是插件内那份把落点写成
+`node_modules/@deepseek-ai/<包名>`，而包名全是不带作用域的 `dsh-plugin-repo-manager`
+→ Node 解析不到包 → 就是上面那条 `received undefined` 报错。
+
+按本仓库的「**实现只放一处**」原则，唯一实现留在 `scripts/install-to-profile.sh`，
+插件内那份改为**转发桩**（`exec` 过去，退出码原样穿透）。
 
 ## 配置
 
-默认仓库目录：`/vol1/1000/AI/DSHPlugin/skills`
-
-如需修改，编辑 `cordis.patch.yml`：
+默认仓库目录：`/vol1/1000/AI/DSHPlugin/skills`（在 `cordis.patch.yml` 里）：
 
 ```yaml
 - insert:
@@ -74,36 +92,31 @@ dsh --profile web &
 
 > ⚠️ `name` 必须与 `package.json` 的 `name`、profile `dependencies` 的 key、
 > 以及物理目录 `node_modules/<name>` **四处完全一致**。
-> 曾因把包装在 `node_modules/@deepseek-ai/` 下而这里写不带作用域的名字，
-> 导致 DSH 报 `invalid plugin, expect function or object with an "apply" method,
-> received undefined`（Node 根本解析不到这个包）。
+> 判据细节：物理目录的**父目录必须正好是 `node_modules`**（只看「末段 == 包名」
+> 会漏判，因为错误的 `@deepseek-ai/` 落点末段同样是包名）。
+> `validate_repo.py` 的 `check_panel_names` / `check_install_targets` 会自动校验。
 
 ## 与官方实现的区别
 
 | 方面 | 官方实现 | 本插件 |
 |------|----------|--------|
-| 位置 | DSH 源码树 | 独立 npm 包 |
-| 编译 | 需要重新编译 DSH | 无需编译 |
+| 位置 | DSH 源码树 | profile 的 `node_modules/<包名>/` |
+| 编译 | 需要重新编译 DSH | 无需编译（产物已入库） |
 | 安装 | 内置 | 可插拔 |
 | 更新 | 随 DSH 版本 | 独立更新 |
 
 ## 持久化
 
-由于 DSH 重启可能清除 `node_modules`，建议：
+若 DSH 重装/升级导致 profile 的 `node_modules` 被重建，重跑一次即可恢复（幂等）：
 
-1. 将安装脚本加入 DSH 启动流程
-2. 或重跑 `bash scripts/install-to-profile.sh`（幂等，可重复执行）恢复
+```bash
+cd /vol1/1000/AI/DSHPlugin && bash scripts/install-to-profile.sh
+```
 
-> 安装脚本已按 `dependencies` 的 key（= 包名）把插件放到
+> 安装脚本按 `dependencies` 的 key（= 包名）把插件放到
 > `node_modules/dsh-plugin-repo-manager`，与包名严格对应，
 > 所以即使 `npm install` 没跑过也能被解析到 —— 不再依赖 npm 额外建链接。
 
-```bash
-# 添加自动恢复脚本
-cat >> /etc/profile.d/dsh-plugin-repo.sh << 'EOF'
-# Auto-install plugin-repo-manager on DSH start
-if [ -d "/vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager" ]; then
-    bash /vol1/1000/AI/DSHPlugin/panels/dsh-plugin-repo-manager/scripts/install.sh
-fi
-EOF
-```
+> ⚠️ 网上流传的「每次登录自动重装」片段（往 `/etc/profile.d/` 写 heredoc）**不必再用**：
+> 它指向的旧插件内脚本曾是错误落点的来源。若你确实需要，让它调用
+> `/vol1/1000/AI/DSHPlugin/scripts/install-to-profile.sh`（唯一实现），别指向插件内那份。

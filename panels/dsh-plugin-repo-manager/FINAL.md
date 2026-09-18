@@ -1,5 +1,11 @@
 # DSH 插件仓库管理插件 - 最终方案
 
+> ⚠️ **本文是历史设计记录，不是安装指引。** 其中的目录树与安装命令已过时：
+> 它描述的是「装进 DSH 运行时源码树 `dsh-runtime/node_modules/@deepseek-ai/`」，
+> 该做法**违反本仓库铁律**（安装不得污染 DSH 源码），且是
+> `invalid plugin, … received undefined` 报错的来源。
+> **安装请看 [`INSTALL.md`](INSTALL.md)，只用一个脚本：`bash scripts/install-to-profile.sh`。**
+
 ## 📦 插件位置
 
 ```

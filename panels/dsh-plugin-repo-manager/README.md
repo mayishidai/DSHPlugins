@@ -76,7 +76,7 @@ PROFILE_DIR=/vol2/@appdata/deepseek.harness/dsh-data/profiles/web \
 ```
 
 安装脚本做三件事：复制 `dist/` + `client/` + `cordis.patch.yml` 到 profile 的
-`node_modules/@deepseek-ai/dsh-plugin-repo-manager/`、用 python3 安全更新
+`node_modules/dsh-plugin-repo-manager/`、用 python3 安全更新
 profile `package.json`、备份原 `package.json`。
 
 卸载（从备份完整还原）：
@@ -85,7 +85,10 @@ profile `package.json`、备份原 `package.json`。
 bash ../../scripts/uninstall-from-profile.sh
 ```
 
-> `scripts/install.sh` 只做文件复制，不含注册步骤；完整流程请用上面的根目录脚本。
+> `scripts/install.sh` 已改为**转发桩**，本身不实现安装逻辑，只是 `exec` 到仓库根的
+> `scripts/install-to-profile.sh`。原因：它曾是同一逻辑的第二份实现，落点写成了
+> 带作用域的路径，导致 Node 解析不到包、DSH 报 `received undefined`。
+> 保留该路径只为不打断既有引用。
 
 ### 从源码构建（开发机）
 

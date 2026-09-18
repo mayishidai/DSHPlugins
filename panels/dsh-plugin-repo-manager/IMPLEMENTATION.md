@@ -1,5 +1,11 @@
 # dsh-plugin-repo-manager - 最终实现
 
+> ⚠️ **本文是历史实现记录，不是安装指引。** 文中出现的
+> `cp -r … dsh-runtime/node_modules/@deepseek-ai/` 一类命令**已废弃**：
+> 它会污染 DSH 运行时源码树，且正是 `invalid plugin, … received undefined`
+> 报错的来源（包名不带作用域，却装进 `@deepseek-ai/`，Node 解析不到）。
+> **安装请看 [`INSTALL.md`](INSTALL.md)：`bash scripts/install-to-profile.sh`。**
+
 ## ✅ 已实现功能
 
 ### 1. 侧边栏按钮
