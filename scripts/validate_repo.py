@@ -7,6 +7,7 @@ DSHPlugins 仓库校验（零依赖，仅用标准库）。
   - 技能型：SKILL.md frontmatter 齐全，name 与目录名一致
   - 面板型：编译产物齐全（dist/ 服务端 + client/ 客户端），main 指向 JS 而非 TS
   - 安装脚本不得原位改写 DSH 源码
+  - 脚本可执行位（git 索引里 .py/.sh 必须为 100755）
   - 凭据粗筛
 
 用法:
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -205,6 +207,73 @@ PLACEHOLDER = re.compile(
     re.IGNORECASE,
 )
 
+# 已知的**公开**客户端标识（非用户私密凭据），精确值豁免。
+#
+# 收录判据 —— 三者必须同时成立，缺一不可：
+#   1. 是**官方随包分发**的字面量，所有用户拿到的都是同一个值（不是每人一份的密钥）；
+#   2. 代码里有**环境变量覆盖**机制（说明它本就是可公开的默认值）；
+#   3. 在 `docs/upstream/<来源>/SOURCE.md` 里**记录过**它的性质与出处。
+#
+# 只精确匹配完整值，不做前缀/正则放宽 —— 避免把豁免面扩大成"名字像默认值就放过"。
+KNOWN_PUBLIC_KEYS = {
+    # jdgold 财富查询网关的默认 API Key：字面量含 def123456，官方客户端标识。
+    # 覆盖入口：CLAWX_JR_API_KEY 环境变量（见 skills/jdgold/scripts/jdjr_config.py）。
+    # 出处与审计结论见 docs/upstream/jdgold/SOURCE.md。
+    "clawx_def123456uUbOxn2UGmmcUCCgln6zscT",
+}
+
+
+def check_exec_bits(repo: Path) -> None:
+    """校验 git 索引里所有 .py / .sh 都是 100755（可执行）。
+
+    为什么必须查：本仓库 `core.filemode=false`（Windows 开发机），
+    **文件系统上的可执行位不可靠**，只有 git 索引里的 mode 才是权威。
+    新增脚本若忘了 `git add --chmod=+x`，会静默以 644 入库 ——
+    在 NAS/Linux 上直接 `./script.py` 就会 Permission denied。
+
+    实测踩坑（2026-09-18）：一次性新增 25 个脚本（jdgold + cloudflare-tunnel
+    + 两个仓库脚本）全部是 644，**两套校验器都没报**。故补此检查。
+
+    只查索引，不查工作区 —— 工作区的 chmod 在 Windows 上不生效。
+    **副作用**：尚未 `git add` 的新文件不在索引里，因此不会被本检查覆盖。
+    收录新脚本时先 `git add`（或 `git add --chmod=+x`）再跑校验。
+    """
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "-s"],
+            cwd=repo, capture_output=True, text=True, check=True,
+        ).stdout
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        warn(f"无法读取 git 索引（跳过可执行位检查）: {type(e).__name__}")
+        return
+
+    bad_files = []
+    checked = 0
+    for line in out.splitlines():
+        parts = line.split("\t", 1)
+        if len(parts) != 2:
+            continue
+        meta, path = parts
+        fields = meta.split()
+        if len(fields) < 2:
+            continue
+        mode = fields[0]
+        if not path.endswith((".py", ".sh")):
+            continue
+        checked += 1
+        if mode != "100755":
+            bad_files.append((mode, path))
+
+    if bad_files:
+        bad(f"{len(bad_files)} 个脚本缺少可执行位（应为 100755）")
+        for mode, path in bad_files[:8]:
+            print(f"         {mode}  {path}")
+        if len(bad_files) > 8:
+            print(f"         … 另有 {len(bad_files) - 8} 个")
+        print("         修法: git add --chmod=+x <文件>")
+    else:
+        ok(f"{checked} 个脚本可执行位正确（100755）")
+
 
 def check_credentials(repo: Path) -> None:
     """粗筛明文凭据。
@@ -218,6 +287,7 @@ def check_credentials(repo: Path) -> None:
       - 值里含 your- / your_ / _here / xxx / <placeholder> / ${VAR}
       - 值里含 example / placeholder / changeme / redacted / dummy / fake / test- / sample
       - 值本身是 shell 变量引用或含 shell 语法（$ / 空格 / 引号）
+      - 值精确等于 KNOWN_PUBLIC_KEYS 里的**官方公开标识**（见该常量的收录判据）
 
     另外：值必须看起来**像**一个密钥字面量——单一 token，无空格、无 shell 元字符。
     否则会误伤文档里的 shell 代码片段，例如：
@@ -229,6 +299,7 @@ def check_credentials(repo: Path) -> None:
         re.IGNORECASE,
     )
     hits = []
+    whitelisted = []
     for sub in ("skills", "panels", "mcps", "scripts"):
         d = repo / sub
         if not d.is_dir():
@@ -250,12 +321,17 @@ def check_credentials(repo: Path) -> None:
                     continue
                 if PLACEHOLDER.search(value):
                     continue
+                if value in KNOWN_PUBLIC_KEYS:
+                    whitelisted.append(str(f.relative_to(repo)))
+                    continue
                 hits.append(f"{f.relative_to(repo)} (值以 '{value[:6]}...' 开头)")
                 break
     if hits:
         bad(f"疑似明文凭据: {', '.join(hits[:5])}")
     else:
         ok("未发现明文凭据（占位示例已排除）")
+    if whitelisted:
+        ok(f"命中已知公开标识豁免（{len(whitelisted)} 处）: {', '.join(sorted(set(whitelisted)))}")
 
 
 def check_mcp(plugin: Path, name: str) -> None:
@@ -383,7 +459,10 @@ def main() -> int:
         print("\n2. 安装脚本安全性")
         check_install_scripts(repo)
 
-        print("\n3. 凭据粗筛")
+        print("\n3. 脚本可执行位")
+        check_exec_bits(repo)
+
+        print("\n4. 凭据粗筛")
         check_credentials(repo)
 
     print("\n=== 结果 ===")

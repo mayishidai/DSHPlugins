@@ -8,7 +8,7 @@
 
 | 目录 | 放什么 | 当前收录 |
 |---|---|---|
-| [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/)、[Cloudflare 官方技能 14 个](docs/upstream/cloudflare-skills/) |
+| [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/)、[cloudflare-tunnel](skills/cloudflare-tunnel/)、[jdgold](skills/jdgold/)、[Cloudflare 官方技能 14 个](docs/upstream/cloudflare-skills/) |
 | [`agents/`](agents/) | **智能体 / 专家包**（角色定义，非能力） | _暂无_ |
 | [`mcps/`](mcps/) | **MCP 服务配置**（配置片段 + 启动脚本，不含凭据） | [hindsight](mcps/hindsight/) |
 | [`panels/`](panels/) | **运行时面板插件**（DSH extensions 双半包，带 UI） | [dsh-plugin-repo-manager](panels/dsh-plugin-repo-manager/) |
@@ -20,10 +20,21 @@
 - **lucky-api**（技能） - 调用自建 Lucky 实例的 HTTP API
   - 零依赖（Python stdlib），`check / get / post / put` 统一入口
   - 鉴权走 `Lucky-Admin-Token`，成败判 `ret` 而非 HTTP 状态码
-  - 附 273 个接口清单，可一键重抓前端刷新
+  - 附 370 个接口清单，可一键重抓前端刷新
+- **cloudflare-tunnel**（技能） - 把本地服务暴露到公网，来自 [xiaoyuboi/cloudflare-tunnel-skill](https://github.com/xiaoyuboi/cloudflare-tunnel-skill)，MIT
+  - Quick 模式给出临时 `https://*.trycloudflare.com` 预览链接；Named 模式给出固定域名
+  - 含可执行 helper：`quick / verify / stop / status / named-config`，另有端到端测试脚本
+  - **前置依赖：需单独安装 `cloudflared`**（技能不含它）；溯源与审计结论见 [`docs/upstream/cloudflare-tunnel-skill/`](docs/upstream/cloudflare-tunnel-skill/)
+- **jdgold**（技能） - 京东黄金 ToC 智能助手，来自京东金融官方分发包
+  - 行情（京东 24h 金价 / 上金所 / 伦敦金 / 7 家银行积存金）、本人持仓与收益、黄金持仓诊断
+  - 交易记录与条件单、黄金综合分析、贵金属 K 线、资讯快讯、大 V 排行
+  - **模拟交易**：模拟金叶子买卖 + 全自动托管盯盘（**仅模拟盘，不涉及真实资金**，含 `--dry-run`）
+  - 含强制静默版本检查与自升级机制 —— **只读比对，不自动升级**；登录态功能走京东授权流程
+  - 无附许可证；包内置的官方公开 API Key 走**精确值豁免**（三条判据 + 双处同步），见 [`docs/upstream/jdgold/`](docs/upstream/jdgold/)
 - **Cloudflare 官方技能**（技能 × 14） - 来自 [cloudflare/skills](https://github.com/cloudflare/skills)，Apache-2.0
   - 路由层 `cloudflare`（含 52 个产品参考包）+ Workers / Durable Objects / Agents SDK / Wrangler 等
   - **原样引入，未做任何改写**，便于随上游更新；许可证与上游 README 存于 [`docs/upstream/cloudflare-skills/`](docs/upstream/cloudflare-skills/)
+  - ⚠️ 与上面的 `cloudflare-tunnel` **不是同一上游**（一个官方 Apache-2.0，一个个人 MIT），仅主题相关
 - **hindsight**（MCP） - 自建 Hindsight 长期记忆服务
   - 藏在隧道后，**端口会变** → 仓库只存**模板 + 探测脚本**，不硬编码地址
   - `resolve_hindsight_url.py` 从稳定跳板探测当前直连地址（可握手验证）
@@ -43,9 +54,16 @@
 ```bash
 bash scripts/preflight.sh              # 检查产物是否齐备、脚本是否会污染 DSH
 python3 scripts/validate_repo.py       # 结构 + 契约校验（零依赖）
+python3 scripts/tests/test_cred_parity.py   # 凭据粗筛：两套实现判定必须一致
 ```
 
-两者都会在缺失编译产物、或 `main` 指向 `.ts` 时报 FAIL。
+三者都会在缺失编译产物、或 `main` 指向 `.ts` 时报 FAIL。
+
+> 第三条是**一致性守卫**。凭据粗筛在 Python 与 Bash 里各写了一份实现，
+> 曾因 Bash 版缺 `-i`、且关键字不允许前缀，漏判 jdgold 的 API Key ——
+> 同一份代码，两套校验给出相反结论。该测试现读两份**生产源码**的
+> 正则与调用标志，用同一份语料比对判定，任何漂移立即失败。
+> 也可以一条命令跑全套：`make verify`。
 
 ### 1. 安装技能型插件（skills/）
 
@@ -103,6 +121,8 @@ DSHPlugins/
 ├── skills/                         # 技能型插件（SKILL.md，DSH 扫描发现）
 │   ├── lucky-api/                  #   Lucky 实例 API 调用（零依赖客户端 + 接口清单）
 │   ├── hello-plugin/               #   示例技能
+│   ├── cloudflare-tunnel/          #   本地服务暴露到公网（Quick / Named Tunnel，需 cloudflared）
+│   ├── jdgold/                     #   京东黄金助手（行情/持仓/条件单/模拟交易；含自升级）
 │   ├── cloudflare/                 #  ┐
 │   ├── wrangler/                   #  │
 │   ├── workers-best-practices/     #  │  Cloudflare 官方技能（14 个）
@@ -131,15 +151,22 @@ DSHPlugins/
 │   ├── FAQ.md                      #   常见问题
 │   ├── development-runbook.md      #   开发指南
 │   ├── how-to-add-a-plugin.md      #   新增插件指南
-│   └── upstream/                   #   第三方资产溯源
-│       └── cloudflare-skills/      #     Cloudflare 技能的上游 LICENSE + README
+│   └── upstream/                   #   第三方资产溯源（每个上游一个目录）
+│       ├── cloudflare-skills/      #     Apache-2.0：Cloudflare 官方技能 ×14
+│       ├── cloudflare-tunnel-skill/#     MIT：cloudflare-tunnel（个人的仓库）
+│       └── jdgold/                 #     无附许可证：京东金融官方 zip 分发包
 ├── scripts/
 │   ├── preflight.sh                #   安装前自检（只读）
 │   ├── validate_repo.py            #   结构/契约校验（零依赖）
+│   ├── gen-manifest.py             #   从 SKILL.md 生成 manifest（含上游溯源登记表）
+│   ├── sync-skill-to-workbuddy.py  #   仓库 skills/ → ~/.workbuddy/skills/（幂等）
 │   ├── install-to-profile.sh       #   安装面板 → DSH profile
 │   ├── uninstall-from-profile.sh   #   从 profile 卸载
 │   ├── start-dsh-with-plugin.sh    #   以 --patch 方式临时加载（不改源码）
-│   └── install-plugin-repo.sh      #   已废弃，执行即退出并提示新方式
+│   ├── install-plugin-repo.sh      #   已废弃，执行即退出并提示新方式
+│   └── tests/
+│       ├── test_cred_parity.py     #   凭据粗筛一致性守卫（两套实现判定必须一致）
+│       └── cred_parity_corpus.txt  #     该测试的语料
 ├── README.md
 └── Makefile
 ```

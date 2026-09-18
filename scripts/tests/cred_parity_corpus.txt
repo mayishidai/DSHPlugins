@@ -1,0 +1,26 @@
+# 凭据粗筛一致性语料（feed 给 scripts/tests/test_cred_parity.py）
+#
+# 每行是一段待判定的源码片段，期望两套实现（Python / Bash）给出**同一个**判定：
+#   none       = 不是凭据（占位示例 / 变量引用 / 长度不足）
+#   whitelist  = 已知公开标识，走精确值豁免
+#   fail       = 疑似明文凭据，应报警
+#
+# 覆盖的关键分支（勿随意删除，每条都对应一次真实踩坑）：
+#   - 关键字**带前缀**：DEFAULT_CLAWX_JR_API_KEY（曾因要求紧邻 = 而漏判）
+#   - 关键字**全大写**：API_KEY / PASSWORD / TOKEN（曾因缺 -i 而漏判）
+#   - 关键字后接冒号或等号：secret:  / api_key =
+#   - 占位符排除：your- / xxx / changeme / ${VAR}
+#   - 长度阈值：短值不算（token = "short"）
+#   - 白名单精确值豁免
+#
+DEFAULT_CLAWX_JR_API_KEY = "clawx_def123456uUbOxn2UGmmcUCCgln6zscT"
+API_KEY = "sk-live-9f8e7d6c5b4a39281706f5e4d3c2b1a0"
+api_key = "aVeryLongRealLookingSecretValue123"
+token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+PASSWORD = "hunter2hunter2hunter2hunter2"
+secret: "AKIAIOSFODNN7Q7ZXY3MNPQR"
+api_key = "your-api-key-here"
+TOKEN = "xxxxxxxxxxxxxxxxxxxxxxxx"
+password = "__PLACEHOLDER__changeme"
+api_key = "${API_KEY_ENV_VAR}"
+token = "short"

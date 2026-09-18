@@ -1,10 +1,13 @@
-.PHONY: build install install-panel uninstall check test help
+.PHONY: build install install-all install-panel uninstall uninstall-panel list check verify test typecheck sync-skill sync-skill-dry help
 
 # DSHPlugins 便捷命令。
 #
 # 说明：本仓库的安装分两类，互不相同——
 #   - 技能型（skills/）：复制到 $DSH_HOME/skills/，由 skill-filesystem 自动发现
 #   - 面板型（panels/）：编译产物装到 DSH profile，注册为 bundle
+#
+# 另外：技能还要在 WorkBuddy 本机可用（~/.workbuddy/skills/）。
+# **以本仓库为唯一实现来源**，用户级那份用 `make sync-skill` 生成，不要手改。
 
 REPO_ROOT := $(shell pwd)
 PANEL_DIR := $(REPO_ROOT)/panels/dsh-plugin-repo-manager
@@ -45,6 +48,22 @@ uninstall: ## 卸载技能：make uninstall NAME=lucky-api
 	rm -rf "$(DSH_HOME)/skills/$(NAME)"
 	@echo "✓ 已卸载 $(NAME)"
 
+sync-skill: ## 同步技能到 WorkBuddy 用户级：make sync-skill NAME=lucky-api（全部：ALL=1）
+	@if [ "$(ALL)" = "1" ]; then \
+		python3 scripts/sync-skill-to-workbuddy.py --all; \
+	else \
+		test -n "$(NAME)" || (echo "用法: make sync-skill NAME=<技能名> 或 make sync-skill ALL=1" && exit 1); \
+		python3 scripts/sync-skill-to-workbuddy.py "$(NAME)"; \
+	fi
+
+sync-skill-dry: ## 只报告同步差异，不写文件
+	@if [ "$(ALL)" = "1" ]; then \
+		python3 scripts/sync-skill-to-workbuddy.py --all --dry-run; \
+	else \
+		test -n "$(NAME)" || (echo "用法: make sync-skill-dry NAME=<技能名> 或 ALL=1" && exit 1); \
+		python3 scripts/sync-skill-to-workbuddy.py "$(NAME)" --dry-run; \
+	fi
+
 list: ## 列出仓库中的插件
 	@echo "技能（skills/）:"
 	@for d in skills/*/; do \
@@ -70,6 +89,18 @@ check: ## 校验仓库中所有插件（只读）
 			echo "FAIL"; \
 		fi; \
 	done
+
+verify: ## 跑仓库侧全部校验（Python 校验 + Bash 自检 + 一致性回归）
+	@echo "== 1/3 仓库结构校验（validate_repo.py）=="
+	@python3 scripts/validate_repo.py || exit 1
+	@echo ""
+	@echo "== 2/3 安装前自检（preflight.sh）=="
+	@bash scripts/preflight.sh || exit 1
+	@echo ""
+	@echo "== 3/3 凭据粗筛一致性回归（两套实现判定必须一致）=="
+	@python3 scripts/tests/test_cred_parity.py || exit 1
+	@echo ""
+	@echo "✓ 全部校验通过"
 
 test: ## 跑面板插件的单元/端到端测试
 	cd $(PANEL_DIR) && npm test

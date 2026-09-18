@@ -204,14 +204,36 @@ for f in scripts/*.sh; do
 done
 echo ""
 
+# ---------- 5.5 说明：脚本可执行位不在本脚本里查 ----------
+# 「所有 .py/.sh 必须是 100755」这一项**只在 validate_repo.py 的 check_exec_bits 里实现**，
+# 本脚本刻意不复制一份 —— 参见下面第 6 节的教训：同一判据写两遍必然漂移。
+#
+# 为什么不在此处实现：可执行位的权威来源是 **git 索引**（本仓库 core.filemode=false，
+# Windows 工作区的文件权限不可靠），而 shell 里解析 `git ls-files -s` 比 Python 更脆。
+# 交给 Python 一处实现，`make verify` 会把两者一起跑。
+#
+# 实测价值（2026-09-18）：新增该检查后立刻抓出 4 个既存违规
+# （skills/turnstile-spin/scripts/*.sh 是 644，而上游实为 755 —— 从 Windows 复制时丢的位）。
+echo ""
+
 # ---------- 6. 无凭据入库 ----------
 echo "6. 凭据粗筛"
-# 与 validate_repo.py 的 check_credentials 保持同一判据：
-# 值必须是单一 token（无空格/引号），且需排除占位示例（your-xxx、${VAR}、example 等）。
-# 否则文档里必然出现的示例（如 CLOUDFLARE_API_TOKEN="your_token_here"）会持续误报。
-CRED_RE='(token|secret|password|api_?key)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"'[:space:]]{16,}["'"'"']'
+# 与 validate_repo.py 的 check_credentials 保持同一判据。
+#
+# ⚠️ 历史教训：这里曾是「正则 + shell 逐行抽取」的独立实现，结果**必然漂移**。
+#    实测漏判：`DEFAULT_CLAWX_JR_API_KEY = "clawx_..."` 这一行。两处根因：
+#      ① 关键字必须允许前缀 —— Python 版从整行任意位置 re.search 到 `API_KEY` 子串，
+#         而旧 shell 正则要求 `api_?key` **紧邻** `=`，直接漏掉。
+#      ② 必须大小写不敏感 —— Python 版用 re.IGNORECASE，旧 shell 正则没有 `-i`，
+#         于是 `api_?key` 匹配不到全大写的 `API_KEY`。两处都得对齐才等价。
+#    修法：关键字用 `[A-Za-z0-9_]*` 打头 + grep 加 `-i`，与 Python 的语义完全对齐。
+#    两套校验给出不同结论，等于其中一套失去信号价值 —— 改这里必须同步改 validate_repo.py。
+CRED_RE='[A-Za-z0-9_]*(token|secret|password|api_?key)[[:space:]]*[:=][[:space:]]*["'"'"'][^"'"'"'[:space:]]{16,}["'"'"']'
 PLACEHOLDER_RE='your[-_]|_here|xxx|<[a-z_-]+>|example|placeholder|changeme|redacted|dummy|fake|test-|sample'
+# 已知公开标识（与 validate_repo.py 的 KNOWN_PUBLIC_KEYS 保持一致，改一处要同步改两处）
+KNOWN_PUBLIC_KEYS_RE='^clawx_def123456uUbOxn2UGmmcUCCgln6zscT$'
 cred_hits=""
+cred_whitelisted=""
 while IFS= read -r line; do
     [ -z "$line" ] && continue
     value="$(printf '%s' "$line" | sed -E 's/.*[:=][[:space:]]*["'"'"']([^"'"'"']*)["'"'"'].*/\1/')"
@@ -219,8 +241,12 @@ while IFS= read -r line; do
         \$*) continue ;;
     esac
     printf '%s' "$value" | grep -qEi "$PLACEHOLDER_RE" && continue
+    if printf '%s' "$value" | grep -qE "$KNOWN_PUBLIC_KEYS_RE"; then
+        cred_whitelisted="${cred_whitelisted}${line%%:*} "
+        continue
+    fi
     cred_hits="$cred_hits$line"$'\n'
-done < <(grep -rInE "$CRED_RE" \
+done < <(grep -rInEi "$CRED_RE" \
         --include='*.json' --include='*.md' --include='*.py' --include='*.ts' --include='*.sh' \
         skills panels mcps scripts 2>/dev/null | grep -v node_modules | head -20)
 
@@ -229,6 +255,9 @@ if [ -n "$cred_hits" ]; then
     printf '%s' "$cred_hits" | head -3
 else
     ok "未发现明文凭据（占位示例已排除）"
+fi
+if [ -n "$cred_whitelisted" ]; then
+    ok "命中已知公开标识豁免: $(printf '%s' "$cred_whitelisted" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
 fi
 echo ""
 

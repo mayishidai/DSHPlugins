@@ -1,7 +1,7 @@
 {
   "name": "lucky-api",
-  "version": "1.0.0",
-  "description": "调用自建 Lucky 实例（lucky.stun.abcc.qzz.io:48020）的 HTTP API：查状态、查模块配置、读日志，并可按需重抓前端刷新接口清单。",
+  "version": "1.1.0",
+  "description": "调用自建 Lucky 实例的 HTTP API：查状态、查模块配置、读日志、刷新接口清单。跳板地址 lucky.abcc.qzz.io 会 302 到直连端口（端口随升级变化，勿硬编码）；鉴权用请求头 Lucky-Admin-Token，成败判 ret 不判 HTTP 码。",
   "author": "abczhou",
   "type": "skill",
   "whenToUse": "当需要查询/更新 Lucky（STUN 穿透、DDNS、端口转发、反代 Web 服务等）的配置或状态，或在自动化里定时调用 Lucky 接口取数/更新数据时。",

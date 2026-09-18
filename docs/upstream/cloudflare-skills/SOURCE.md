@@ -36,15 +36,31 @@
 | `cloudflare-one-migrations` | 从 Zscaler / Palo Alto / 传统 VPN 迁移的评估与规划 |
 | `nextjs-on-cloudflare` | Next.js 跑 Workers（vinext） |
 
-## 本项目做的唯一改动
+## 本项目做的改动
 
-只新增了 `manifest.json`（14 份），**SKILL.md 与 references/ 全部原样未动**。
+1. 新增 `manifest.json`（14 份），**SKILL.md 与 references/ 全部原样未动**。
 
-原因：本仓库的面板 `dsh-plugin-repo-manager` 需读 `manifest.json` 才能显示版本、才能走更新机制。
-`manifest.json` 在本仓库里是**可选**文件（缺失只警告不报错），所以这 14 份属于「补全元数据」，
-不是对上游内容的改写。
+   原因：本仓库的面板 `dsh-plugin-repo-manager` 需读 `manifest.json` 才能显示版本、才能走更新机制。
+   `manifest.json` 在本仓库里是**可选**文件（缺失只警告不报错），所以这 14 份属于「补全元数据」，
+   不是对上游内容的改写。
 
-`description` 字段是从各 `SKILL.md` 的 frontmatter **读取**得到，未手抄，避免与上游不一致。
+   `description` 字段是从各 `SKILL.md` 的 frontmatter **读取**得到，未手抄，避免与上游不一致。
+
+2. **恢复 4 个脚本的可执行位**（2026-09-18 修正）。
+
+   上游 `skills/turnstile-spin/scripts/{auth-probe,persist-skill,validate,widget-create}.sh`
+   的 mode 是 **`100755`**，但本仓库这三份最初入库时是 `100644` ——
+   因为是在 Windows 上复制进来的，**Windows 不保留可执行位**，静默丢了。
+
+   已修正为 `100755`，与上游一致。**内容未动**，用 blob 哈希逐一比对确认与上游
+   逐字节相同（`44265cf` / `73e2c66` / `5443faf` / `bde8ad6`）。
+
+   为什么这个修正让「原样引入」更准确而非更偏离：丢可执行位本身就是**复制失真**，
+   修回去是恢复上游原状。不改的后果是在 NAS/Linux 上 `./validate.sh` 直接
+   Permission denied。
+
+   > 该问题在仓库里静默存在了多轮，直到 2026-09-18 给 `validate_repo.py`
+   > 补上 `check_exec_bits` 才被抓出（新检查第一次运行就报了这 4 个）。
 
 ## 已知限制
 

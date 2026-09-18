@@ -1,0 +1,14 @@
+{
+  "name": "jdgold",
+  "version": "1.0.0",
+  "description": "京东黄金ToC智能助手：实时金价查询（京东24h/上金所/伦敦金/7家银行积存金）、持仓收益与诊断、交易记录与条件单、黄金综合分析、贵金属行情与K线、资讯快讯、大V排行、黄金模拟交易（模拟买卖与全自动托管盯盘）。",
+  "author": "京东金融 (JD Finance)",
+  "type": "skill",
+  "source": "https://caifu-h5.s3.cn-north-1.jdcloud-oss.com/gold-skill/jdgold-1.0.0.zip",
+  "license": "未附许可证（官方分发包）",
+  "whenToUse": "当用户需要查询黄金/贵金属行情（京东24h金价、上金所、伦敦金、银行积存金）、查看本人积存金持仓与收益、黄金持仓诊断、交易记录与条件单、黄金综合分析、贵金属K线、黄金资讯快讯、大V排行，或进行黄金模拟交易（模拟金叶子买卖、全自动托管盯盘）时使用。需要登录态的功能（持仓/收益/早报/交易记录/条件单）会走京东授权登录流程。",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  }
+}

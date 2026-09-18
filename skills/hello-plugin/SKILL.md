@@ -31,4 +31,6 @@ hello-plugin/
 
 ## 删除它
 
-不需要时，删除整个 `skills/hello-plugin/` 目录，再运行 `./scripts/sync-to-dsh.sh --prune` 清理。
+不需要时：先在仓库里删掉整个 `skills/hello-plugin/` 目录，再执行
+`make uninstall NAME=hello-plugin` 把 DSH 里的那份副本也清掉
+（仓库侧删除**不会**自动清理 `$DSH_HOME/skills/` 里的已装副本）。

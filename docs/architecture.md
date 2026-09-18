@@ -166,14 +166,17 @@ isNewer(latest: string | null, current: string | null): boolean
 
 ### 4.5 批量同步
 
-`sync-to-dsh.sh` 批量同步：已装则更新、未装则安装。
+技能型：`make install-all` 把 `skills/` 下全部技能同步到 `$DSH_HOME/skills/`
+（幂等，先删后复制）。仓库里删掉的技能不会自动清掉，需 `make uninstall NAME=<name>`。
+
+WorkBuddy 用户级副本：`make sync-skill ALL=1`（以本仓库为唯一实现来源）。
 
 > 校验 `isNewer` 逻辑改动后，务必跑 `panels/dsh-plugin-repo-manager/scripts/test-isnewer.mjs`（23 例边界用例）。
 
 
 ## 5. 清单（manifest.json）的两种用途
 
-1. **整仓清单** `registry/manifest.json`：由 `build-manifest.sh` 扫描 `skills/` 生成，描述所有可用插件，可托管到静态服务器供远程商店/更新使用（字段对齐 DSH 的 `SkillSummary`）。
+1. **整仓清单** `registry/manifest.json`：由面板插件（`dsh-plugin-repo-manager`）扫描 `skills/` 生成，描述所有可用插件，可托管到静态服务器供远程商店/更新使用（字段对齐 DSH 的 `SkillSummary`）。单个技能的 manifest 用 `scripts/gen-manifest.py` 刷新。
 2. **单插件清单** `<分类目录>/<name>/manifest.json`：该插件的元数据（版本、作者、type、自定义安装脚本）。可选的。
 
 ## 6. 运行时（面板）插件的加载
