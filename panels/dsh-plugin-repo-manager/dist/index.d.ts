@@ -19,12 +19,44 @@ export declare const name = "dsh-plugin-repo-manager";
  */
 export declare function normalizeSubPath(pathname: string, prefix?: string): string;
 /**
+ * 判断 `target` 是否确实位于 `base` 目录**之内**（防路径穿越）。
+ *
+ * ## ⚠️ 这里曾经写成 `require('path').relative(...)` —— 一个静默失效的 bug
+ *
+ * 本包是 `"type": "module"`（ESM），而 ESM **没有** `require`。
+ * `require('path')` 于是抛 `ReferenceError: require is not defined`。
+ * 它为什么能藏很久：
+ *   - 该行在 `isValidName` 之后、`existsSync` 之前，**参数合法且目录存在时必然执行**；
+ *   - 异常被 `handleApiRequest` 的 catch 兜住，只回一个
+ *     `{ ok:false, error:{ code:'INTERNAL_ERROR', message:'require is not defined' } }`，
+ *     HTTP 状态**仍是 200**，日志里也只是一行 ERROR；
+ *   - 前端「卸载」按钮因此表现为**点了没反应**（列表不刷新、也没有明显报错）。
+ * 教训：**ESM 里绝不能用 `require`**；且构建产物必须由测试断言「不含 `require(`」，
+ * 否则编译能过、单测若用 CJS 方式加载也会骗过（`node -e` 会注入 `require`）。
+ *
+ * 用已导入的 `path.relative` 实现，语义与旧写法一致：
+ * 结果为空、以 `..` 开头、或仍是绝对路径，都说明 target 不在 base 内。
+ */
+export declare function isInsideDir(base: string, target: string): boolean;
+/**
+ * 读取技能/插件的**描述**，供面板展示。
+ *
+ * 来源按优先级依次尝试（本仓库实测：**全部 19 个插件都能从 manifest.json 拿到**，
+ * 后两条是给尚未补 manifest 的插件兜底）：
+ *   1. `manifest.json` 的 `description`
+ *   2. `SKILL.md` 的 YAML frontmatter `description:`（去引号、压平换行）
+ *   3. `package.json` 的 `description`
+ * 取不到就返回 null —— 前端显示占位符，**不编造内容**。
+ */
+export declare function getPluginDescription(pluginDir: string): string | null;
+/**
  * 列出仓库中的插件
  */
 export declare function listPlugins(repoDir: string, skillsDir: string): Array<{
     name: string;
     repoDirName: string;
     version: string | null;
+    description: string | null;
     installed: boolean;
     installedVersion: string | null;
     hasUpdate: boolean;

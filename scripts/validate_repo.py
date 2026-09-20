@@ -126,6 +126,66 @@ def check_manifest(plugin: Path, name: str, expected_type: str) -> None:
         bad(f"{name}: manifest type='{mtype}' ≠ 目录类型 '{expected_type}'")
 
 
+def _strip_js_comments(src: str) -> str:
+    """剔除 JS/TS 注释，便于「只看真实代码」地做特征检查。
+
+    必须剔除的原因：本项目习惯在注释里引用**旧的错误写法**作为反面教材
+    （例如 `require('path')`、`url.pathname === '/list'`），
+    不剔除就会把自己的说明文字当成违规命中（已实际踩过这个坑）。
+    """
+    src = re.sub(r"/\*[\s\S]*?\*/", "", src)
+    src = re.sub(r"^\s*//.*$", "", src, flags=re.MULTILINE)
+    return src
+
+
+def check_panel_esm_safety(repo: Path) -> None:
+    """面板插件：ESM 包里**不得**出现 `require(` 调用。
+
+    这是 2026-09-20 线上事故的直接防线。本仓库所有面板插件都声明
+    `"type": "module"`，而 **ESM 没有 `require`**。当时
+    `dist/index.js` 的 `uninstallPlugin()` 里写了
+    `require('path').relative(...)`，于是：
+
+      - 抛 `ReferenceError: require is not defined`；
+      - 异常被 handler 的 catch 兜住，只回 `HTTP 200 + INTERNAL_ERROR`；
+      - 前端「卸载」按钮**点了没反应**（列表不刷新、也没可见报错）。
+
+    ## 为什么必须在这里再做一次（已有 test-esm-safety.mjs）
+    那个测试只覆盖 `dsh-plugin-repo-manager` 一个插件；本仓库是**多插件**仓库，
+    新增插件时不会自动继承。而且这条检查是**静态**的，不依赖跑起来，
+    对「产物入库但本机无运行时」的场景也能生效。
+
+    ⚠️ 判据要先剔注释再匹配 —— 本仓库注释里会引用 `require('path')` 作反例。
+    另外 `client/client.js` 里的 `require('react')` 是**合法**的：
+    那段代码跑在浏览器自带的加载器里，不走 Node 的 ESM 解析，故只查 dist/。
+    """
+    panels_root = repo / "panels"
+    if not panels_root.is_dir():
+        return
+
+    offenders: list[str] = []
+    scanned = 0
+    for plugin in sorted(p for p in panels_root.iterdir() if p.is_dir()):
+        dist_js = plugin / "dist" / "index.js"
+        if not dist_js.is_file():
+            continue
+        scanned += 1
+        code = _strip_js_comments(dist_js.read_text(encoding="utf-8", errors="replace"))
+        for m in re.finditer(r"^.*\brequire\s*\(.*$", code, re.MULTILINE):
+            line = m.group(0).strip()
+            offenders.append(f"{plugin.name}/dist/index.js: {line[:80]}")
+
+    if offenders:
+        bad(f"{len(offenders)} 处 ESM 产物里使用了 require()"
+            f"（面板插件是 \"type\": \"module\"，ESM 无 require）")
+        for o in offenders[:8]:
+            print(f"         {o}")
+        print("         改法：改用顶部 import 的模块（如 node:path 的 relative）。")
+        print("         症状：卸载/安装点了没反应 —— HTTP 200 但 error.code=INTERNAL_ERROR。")
+    else:
+        ok(f"面板产物的 ESM 兼容性正常（{scanned} 个 dist 无 require 调用）")
+
+
 def check_panel(plugin: Path, name: str) -> None:
     """面板型：核心是「编译产物齐备、装了就能用」。"""
     # 服务端编译产物
@@ -745,6 +805,9 @@ def main() -> int:
 
         print("\n2.7 安装 / 卸载落点一致性")
         check_install_uninstall_parity(repo)
+
+        print("\n2.8 面板产物的 ESM 兼容性")
+        check_panel_esm_safety(repo)
 
         print("\n3. 脚本可执行位")
         check_exec_bits(repo)

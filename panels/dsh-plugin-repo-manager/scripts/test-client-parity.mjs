@@ -113,6 +113,21 @@ console.log('\n[6. 空态语义：没有插件 ≠ 出错]')
 // 但都必须存在「空仓库」这个独立分支，否则会把「空」误报成「错」。
 bothHave('存在独立的空态文案', /仓库中没有插件|No plugins in repository|zh\.empty/)
 
+console.log('\n[7. 描述列：面板要显示描述（2026-09-20 补）]')
+// 用户反馈「技能只有名字版本状态，缺少描述」。后端补了 description，
+// 前端两份也都必须真的**渲染**它 —— 只在类型里声明不算。
+bothHave('类型/接口声明了 description 字段', /description/)
+bothHave('渲染 plugin.description 的值', /plugin\.description/)
+bothHave('描述为空的占位（不显示 undefined）', /plugin\.description\s*\?|description\s*\?/)
+check('bundle 里也渲染了 plugin.description', /plugin\.description/.test(clientJs))
+check('bundle 含描述列的本地化标题', /description:/.test(clientJs))
+
+console.log('\n[8. 卸载失败必须可见（第 4 次漂移候选）]')
+// 卸载曾经「点了没反应」：后端抛 require is not defined，前端只在控制台记录。
+// 两份都必须把失败**显示到界面**上。
+bothHave('卸载失败设置可见错误（含插件名）', /卸载\s*'?\s*\+?\s*name|卸载 \$\{name\}/)
+check('bundle 后台 error.details 也带给用户看', /error\.details|\.details/.test(clientJs))
+
 console.log(`\n结果: ${pass} 通过 / ${fail} 失败 / 共 ${pass + fail} 例`)
 if (fail > 0) {
   console.log('\n两份实现已经漂移。请同步修改：')

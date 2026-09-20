@@ -97,10 +97,36 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 | `repoExists:false` | **仓库目录不对** | 改 `cordis.patch.yml` 的 `repoDir` |
 | `repoEntryCount:0` | 目录在但无合法插件子目录 | `repoDir` 应指向 `DSHPlugins/skills` |
 | `skillsExists:false` | 安装目标目录不存在 | 核对 `skillsDir` 与 DSH 实际扫描目录 |
+| `selfTest.ok:false` | 路径防护在当前环境失效 | 看 `pathGuard` 异常，多半是 ESM/CJS 混用 |
 
 > ⚠️ **`skillsDir` 陷阱**：其优先级为 patch 的 `skillsDir` > `DSH_PLUGIN_SKILLS_DIR`
 > > `$DSH_HOME/skills`。若 NAS 的 `DSH_HOME` 与 patch 写死的 `~/.dsh/skills` 不一致，
 > 面板会把技能装到 DSH 扫不到的地方 —— **装了不生效且不报错**。
+
+## 排查：点「安装 / 卸载」没反应
+
+列表正常显示、但点按钮后**毫无动静**（不刷新、也无报错）。典型根因是
+**ESM 里用了 `require`**：本包是 `"type": "module"`，ESM 没有 `require`，
+调用即抛 `ReferenceError: require is not defined`；异常被 handler 的 `catch` 兜住，
+只回 `HTTP 200 + INTERNAL_ERROR`，前端若「只记控制台」就完全不可见。
+
+排查要点：
+
+1. 打 `/_health` 看 `selfTest.ok` 与 `moduleSystem`；
+2. 确认产物里**没有** `require(` 调用 —— 注意先剔注释，
+   否则本仓库注释里的反例引用会误报；
+3. ⚠️ **别用 `node -e` 验证**：CJS 引导会注入 `require`，
+   同样的代码在那个环境跑得通，**测试会骗过你**。
+   必须用真实 ESM 模块（`scripts/test-esm-safety.mjs` 即如此）。
+
+> 修 bug 时务必连带确认**路径穿越防护仍有效**：`isInsideDir()` 要比旧实现更严 ——
+> 它还要拒绝 `skills` 与 `skills-other` 这类「同前缀不同目录」的情况。
+
+## 描述字段
+
+`/list` 返回的 `description` 依次从 `manifest.json` → `SKILL.md` frontmatter →
+`package.json` 取第一个命中的；都取不到返回 `null`（**不编造内容**）。
+新增插件时**至少给一处描述**，否则面板该列显示 `—`。
 
 ## 版本与更新
 

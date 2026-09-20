@@ -75,9 +75,14 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
     "skillsDir": "/root/.dsh/skills",
     "skillsExists": true
   },
-  "config": { "pollInterval": 3000, "showSidebarButton": true, "sidebarTitle": "插件仓库" }
+  "config": { "pollInterval": 3000, "showSidebarButton": true, "sidebarTitle": "插件仓库" },
+  "selfTest": { "ok": true, "pathGuard": "ok", "moduleSystem": "esm" }
 }
 ```
+
+`selfTest` 是 2026-09-20 新增的运行时自检：直接验证「路径防护」在当前模块系统下可用。
+`moduleSystem` 应为 `esm`（本包是 `"type": "module"`）；`selfTest.ok` 为 `false` 时，
+`pathGuard` 会给出具体异常 —— 用于定位「点安装/卸载没反应」那类故障。
 
 对照表：
 
@@ -89,6 +94,30 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 | `ok:true` 但 `repoExists:false` | **仓库目录不对** | 改 `cordis.patch.yml` 的 `repoDir` |
 | `ok:true` 且 `repoEntryCount:0` | 目录在但**没有合法插件子目录** | 确认 `repoDir` 指向 `DSHPlugins/skills`（含插件子目录那层），不是仓库根 |
 | `ok:true` 且 `skillsExists:false` | 安装目标目录不存在 | 确认 `skillsDir` 与 DSH 实际扫描目录一致（见下方「skillsDir 陷阱」） |
+| `selfTest.ok:false` | **路径防护在当前环境失效** | 看 `pathGuard` 的异常；多半是 ESM/CJS 混用（见下方「ESM 陷阱」） |
+
+### 点「安装 / 卸载」没反应（2026-09-20 已修）
+
+**症状**：点按钮后列表不刷新，也没有可见报错，像按钮坏了。
+
+**当时的根因**：`uninstallPlugin` / `installPlugin` 里写的是
+
+```js
+const rel = require('path').relative(skillsDir, targetDir)   // ← ESM 里没有 require
+```
+
+本包声明 `"type": "module"`，**ESM 没有 `require`** → 抛
+`ReferenceError: require is not defined`。异常被 handler 的 `catch` 兜住，
+只回 `HTTP 200 + { ok:false, error:{ code:'INTERNAL_ERROR' } }`，
+而前端当时「只把失败记在控制台」—— 于是用户看到的就是**点了没反应**。
+
+两处都改了：后端改用已导入的 `path.relative`（并抽成 `isInsideDir()`），
+前端把失败原因**显示到界面上**（含插件名与后端 `error.message`）。
+
+> ⚠️ 这类 bug 有个恶劣性质：**用 CJS 方式跑测试会骗过你**。
+> `node -e` 会注入 `require`，所以同样的代码在那个环境下跑得通、测试全绿。
+> 必须用**真实 ESM 模块**验证 —— `scripts/test-esm-safety.mjs` 就是这么做的，
+> 且额外静态断言「产物里不得出现 `require(`」。
 
 ### `skillsDir` 陷阱
 
@@ -249,19 +278,24 @@ dsh-plugin-repo-manager/
     ├── test-install-update.mjs # 安装/更新流程端到端测试（24 例）
     ├── test-paths.mjs          # 路径解析测试（14 例）
     ├── test-sidebar.mjs        # 侧边栏配置与注册测试（35 例）
-    ├── test-client-parity.mjs  # 源码 / bundle 副本一致性（18 例）
+    ├── test-client-parity.mjs  # 源码 / bundle 副本一致性（25 例）
     ├── test-route-prefix.mjs   # 路由前缀归一化（25 例）
-    └── test-api-e2e.mjs        # HTTP API 端到端，真起 server（27 例）
+    ├── test-api-e2e.mjs        # HTTP API 端到端，真起 server（27 例）
+    └── test-esm-safety.mjs     # ESM 里禁用 require + 描述字段（22 例）
 ```
 
 ### HTTP API
 
 | 端点 | 方法 | 说明 |
 |---|---|---|
-| `/api/plugin-repo/_health` | GET | **自检**：路由解析、目录存在性、条目数、生效配置 |
-| `/api/plugin-repo/list` | GET | 列出所有插件（含 `hasUpdate`） |
+| `/api/plugin-repo/_health` | GET | **自检**：路由解析、目录存在性、条目数、生效配置、运行时自检 |
+| `/api/plugin-repo/list` | GET | 列出所有插件（含 `description` 与 `hasUpdate`） |
 | `/api/plugin-repo/install` | POST | 安装 / 更新（body: `{"name":"..."}`） |
 | `/api/plugin-repo/uninstall` | POST | 卸载（body: `{"name":"..."}`） |
+
+> **描述从哪来**：`list` 返回的 `description` 按
+> `manifest.json` → `SKILL.md` 的 frontmatter → `package.json` 顺序取第一个命中的，
+> 都取不到则返回 `null`（**不编造内容**）。前端长描述截断为两行，悬停看全文。
 
 > **路由前缀兼容**：`webServer.register({kind:'prefix', path:'/api/plugin-repo'})` 之后，
 > handler 收到的 `req.url` 是「剥掉前缀的 `/list`」还是「保留全路径的

@@ -27,6 +27,7 @@ window.__ModuleLoader__.load({
       confirmInstall: '确认安装',
       confirmInstallMsg: '确定要安装 "{{name}}" 吗？将从仓库复制到 skills 目录。',
       version: '版本',
+      description: '描述',
       refresh: '刷新',
       refreshing: '刷新中...',
       settings: '设置',
@@ -54,6 +55,7 @@ window.__ModuleLoader__.load({
       confirmInstall: 'Confirm Install',
       confirmInstallMsg: 'Install "{{name}}"?',
       version: 'Version',
+      description: 'Description',
       refresh: 'Refresh',
       refreshing: 'Refreshing...',
       settings: 'Settings',
@@ -158,11 +160,28 @@ window.__ModuleLoader__.load({
       }
 
       function uninstall(name) {
-        setActionLoading(name); setConfirm(null);
-        fetch(apiBase + '/uninstall', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name}) })
-          .then(function(r) { return r.json(); })
-          .then(function(d) { if (d.ok) load(); else setError(d.error && d.error.message); })
-          .catch(function(e) { setError(e && e.message); })
+        setActionLoading(name); setConfirm(null); setNotice(null); setError(null);
+        var url = apiBase + '/uninstall';
+        fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({name: name}) })
+          .then(function(r) {
+            if (!r.ok) { var err = new Error('HTTP ' + r.status + ' @ ' + url); err.status = r.status; err.url = url; throw err; }
+            return r.json();
+          })
+          .then(function(d) {
+            if (d.ok) { setNotice('已卸载 ' + name); load(); }
+            else {
+              // 必须显示后端 error 的**内容**：曾经的 bug 是后端抛
+              // "require is not defined" 而前端什么都不显示 → 表现成「点了没反应」。
+              // 注意：整段是模板字符串，换行符必须写成反斜杠+n 两个字符的转义形式，
+              // 直接写反斜杠会被模板串在生成期解析成真实换行 → 产出的 JS 语法错误。
+              var detail = (d.error && d.error.details) ? '（' + String(d.error.details).split('\n')[0] + '）' : '';
+              setError('卸载 ' + name + ' 失败：' + ((d.error && d.error.message) || '未知原因') + detail);
+            }
+          })
+          .catch(function(e) {
+            var m = (e && e.message) || '未知错误';
+            setError('卸载 ' + name + ' 失败：' + (m.indexOf('@') >= 0 ? m : m + ' @ ' + url));
+          })
           .finally(function() { setActionLoading(null); });
       }
 
@@ -225,6 +244,7 @@ window.__ModuleLoader__.load({
             jsxRuntime.jsx('tr', {style:{borderBottom:'1px solid var(--dsw-alias-border-l2)'}},
               jsxRuntime.jsx('th', {style:{padding:'8px',width:'40px'}}, jsxRuntime.jsx('input', {type:'checkbox',checked:selected.size===plugins.length&&plugins.length>0,onChange:function(e){e.target.checked?setSelected(new Set(plugins.map(function(p){return p.name;}))):setSelected(new Set());}})),
               jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'left'}}, 'Plugin'),
+              jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'left'}}, zh.description),
               jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'left'}}, 'Version'),
               jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'center'}}, 'Status'),
               jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'right'}}, 'Action')
@@ -234,6 +254,12 @@ window.__ModuleLoader__.load({
             return jsxRuntime.jsx('tr', {key:plugin.name,style:{borderBottom:'1px solid var(--dsw-alias-border-l3)'}},
               jsxRuntime.jsx('td', {style:{padding:'12px 8px',textAlign:'center'}}, jsxRuntime.jsx('input', {type:'checkbox',checked:selected.has(plugin.name),onChange:function(){toggle(plugin.name);}})),
               jsxRuntime.jsx('td', {style:{padding:'12px 8px'}}, jsxRuntime.jsx('div', {style:{fontWeight:500}}, plugin.name)),
+              // 描述列：两行截断 + title 悬停看全文（与 React 源同款行为）
+              jsxRuntime.jsx('td', {style:{padding:'12px 8px',maxWidth:'320px'}},
+                plugin.description
+                  ? jsxRuntime.jsx('span', {title:plugin.description, style:{display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',fontSize:'12px',lineHeight:1.5,color:'var(--dsw-alias-label-secondary)'}}, plugin.description)
+                  : jsxRuntime.jsx('span', {style:{fontSize:'12px',color:'var(--dsw-alias-label-tertiary)'}}, '—')
+              ),
               jsxRuntime.jsx('td', {style:{padding:'12px 8px',color:'var(--dsw-alias-label-tertiary)'}},
                 plugin.version || '—',
                 plugin.installed && plugin.installedVersion && plugin.installedVersion !== plugin.version && jsxRuntime.jsx('div', {style:{fontSize:'11px'}}, 'Installed: ' + plugin.installedVersion),

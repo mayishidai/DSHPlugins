@@ -6,6 +6,8 @@ export interface RepoPlugin {
   name: string
   repoDirName: string
   version: string | null
+  /** 插件描述（后端从 manifest.json / SKILL.md / package.json 读出；取不到为 null） */
+  description?: string | null
   installed: boolean
   installedVersion: string | null
   /** 仓库版本比已装版本新（后端算好的） */
@@ -164,20 +166,34 @@ export function PluginRepoPanel({
   const handleUninstall = async (name: string) => {
     setActionLoading(name)
     setShowConfirm(null)
+    setNotice(null)
+    setError(null)
+    const url = `${apiBase}/uninstall`
     try {
-      const response = await fetch(`${apiBase}/uninstall`, {
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       })
-      const data: ApiResponse<null> = await response.json()
+      // 与 loadPlugins 同理：先判 HTTP 状态再解析，避免 404 返回 HTML 时
+      // 抛 "Unexpected token '<'" 把「接口不存在」误报成「JSON 解析失败」。
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} @ ${url}`)
+      }
+      const data: ApiResponse<null> & { details?: string } = await response.json()
       if (data.ok) {
+        setNotice(`已卸载 ${name}`)
         await loadPlugins()
       } else {
-        setError(data.error?.message || '卸载失败')
+        // ⚠️ 必须把后端 error 的**内容**显示出来。
+        // 曾经这里也是「失败只在控制台」，于是后端抛的
+        // `require is not defined` 用户完全看不到 —— 表现就是「点了没反应」。
+        const detail = data.error?.details ? `（${data.error.details.split('\n')[0]}）` : ''
+        setError(`卸载 ${name} 失败：${data.error?.message || '未知原因'}${detail}`)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error')
+      const msg = e instanceof Error ? e.message : '未知错误'
+      setError(`卸载 ${name} 失败：${msg.includes('@') ? msg : `${msg} @ ${url}`}`)
     } finally {
       setActionLoading(null)
     }
@@ -384,6 +400,7 @@ export function PluginRepoPanel({
                 />
               </th>
               <th style={{ padding: '8px', textAlign: 'left' }}>插件名称</th>
+              <th style={{ padding: '8px', textAlign: 'left' }}>描述</th>
               <th style={{ padding: '8px', textAlign: 'left' }}>版本</th>
               <th style={{ padding: '8px', textAlign: 'center' }}>状态</th>
               <th style={{ padding: '8px', textAlign: 'right' }}>操作</th>
@@ -404,6 +421,27 @@ export function PluginRepoPanel({
                   <div style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)' }}>
                     {plugin.repoDirName}
                   </div>
+                </td>
+                {/* 描述列：长描述截断显示，完整内容放 title 里，鼠标悬停可看全 */}
+                <td style={{ padding: '12px 8px', maxWidth: '320px' }}>
+                  {plugin.description ? (
+                    <span
+                      title={plugin.description}
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        fontSize: '12px',
+                        lineHeight: 1.5,
+                        color: 'var(--dsw-alias-label-secondary)',
+                      } as React.CSSProperties}
+                    >
+                      {plugin.description}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)' }}>—</span>
+                  )}
                 </td>
                 <td style={{ padding: '12px 8px', color: 'var(--dsw-alias-label-tertiary)' }}>
                   {plugin.version || '—'}

@@ -9,7 +9,7 @@
  * - 轮询刷新（可自定义间隔）
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, mkdirSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { resolve, join, dirname, relative, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 export const name = 'dsh-plugin-repo-manager';
 /**
@@ -148,6 +148,35 @@ function isValidName(name) {
     return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name);
 }
 /**
+ * 判断 `target` 是否确实位于 `base` 目录**之内**（防路径穿越）。
+ *
+ * ## ⚠️ 这里曾经写成 `require('path').relative(...)` —— 一个静默失效的 bug
+ *
+ * 本包是 `"type": "module"`（ESM），而 ESM **没有** `require`。
+ * `require('path')` 于是抛 `ReferenceError: require is not defined`。
+ * 它为什么能藏很久：
+ *   - 该行在 `isValidName` 之后、`existsSync` 之前，**参数合法且目录存在时必然执行**；
+ *   - 异常被 `handleApiRequest` 的 catch 兜住，只回一个
+ *     `{ ok:false, error:{ code:'INTERNAL_ERROR', message:'require is not defined' } }`，
+ *     HTTP 状态**仍是 200**，日志里也只是一行 ERROR；
+ *   - 前端「卸载」按钮因此表现为**点了没反应**（列表不刷新、也没有明显报错）。
+ * 教训：**ESM 里绝不能用 `require`**；且构建产物必须由测试断言「不含 `require(`」，
+ * 否则编译能过、单测若用 CJS 方式加载也会骗过（`node -e` 会注入 `require`）。
+ *
+ * 用已导入的 `path.relative` 实现，语义与旧写法一致：
+ * 结果为空、以 `..` 开头、或仍是绝对路径，都说明 target 不在 base 内。
+ */
+export function isInsideDir(base, target) {
+    const rel = relative(resolve(base), resolve(target));
+    if (!rel)
+        return false; // 两者是同一个路径
+    if (rel.startsWith('..'))
+        return false;
+    if (isAbsolute(rel))
+        return false; // Windows 上跨盘符时 relative 会返回绝对路径
+    return true;
+}
+/**
  * 读取插件版本
  */
 function getPluginVersion(pluginDir) {
@@ -162,6 +191,64 @@ function getPluginVersion(pluginDir) {
                 return data.version;
         }
         catch { /* 该文件损坏则继续尝试下一个 */ }
+    }
+    return null;
+}
+/**
+ * 读取技能/插件的**描述**，供面板展示。
+ *
+ * 来源按优先级依次尝试（本仓库实测：**全部 19 个插件都能从 manifest.json 拿到**，
+ * 后两条是给尚未补 manifest 的插件兜底）：
+ *   1. `manifest.json` 的 `description`
+ *   2. `SKILL.md` 的 YAML frontmatter `description:`（去引号、压平换行）
+ *   3. `package.json` 的 `description`
+ * 取不到就返回 null —— 前端显示占位符，**不编造内容**。
+ */
+export function getPluginDescription(pluginDir) {
+    // 1. manifest.json
+    const mf = join(pluginDir, 'manifest.json');
+    if (existsSync(mf)) {
+        try {
+            const d = JSON.parse(readFileSync(mf, 'utf-8'));
+            if (typeof d?.description === 'string' && d.description.trim()) {
+                return d.description.trim();
+            }
+        }
+        catch { /* 损坏则继续往下找 */ }
+    }
+    // 2. SKILL.md frontmatter
+    const skillMd = join(pluginDir, 'SKILL.md');
+    if (existsSync(skillMd)) {
+        try {
+            const text = readFileSync(skillMd, 'utf-8');
+            // 只在前置的 frontmatter 块里找，避免正文里的 "description:" 误命中
+            const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
+            if (fm) {
+                const m = /^description:\s*(.+)$/m.exec(fm[1]);
+                if (m) {
+                    let v = m[1].trim();
+                    // 去掉包裹的引号（YAML 里单双引号都常见）
+                    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+                        v = v.slice(1, -1);
+                    }
+                    v = v.replace(/\s+/g, ' ').trim();
+                    if (v)
+                        return v;
+                }
+            }
+        }
+        catch { /* 继续往下找 */ }
+    }
+    // 3. package.json
+    const pkg = join(pluginDir, 'package.json');
+    if (existsSync(pkg)) {
+        try {
+            const d = JSON.parse(readFileSync(pkg, 'utf-8'));
+            if (typeof d?.description === 'string' && d.description.trim()) {
+                return d.description.trim();
+            }
+        }
+        catch { /* 忽略 */ }
     }
     return null;
 }
@@ -194,6 +281,7 @@ export function listPlugins(repoDir, skillsDir) {
             name: dirName,
             repoDirName: dirName,
             version,
+            description: getPluginDescription(pluginDir),
             installed: isInstalled,
             installedVersion: installedVersion ?? undefined,
             hasUpdate: isInstalled && isNewer(version, installedVersion),
@@ -258,8 +346,7 @@ export function uninstallPlugin(skillsDir, name) {
         return { ok: false, error: { code: 'INVALID_NAME', message: `插件名 "${name}" 不是合法的 kebab-case` } };
     }
     const targetDir = join(skillsDir, name);
-    const rel = require('path').relative(skillsDir, targetDir);
-    if (!rel || rel.startsWith('..') || rel.startsWith('/')) {
+    if (!isInsideDir(skillsDir, targetDir)) {
         return { ok: false, error: { code: 'PATH_TRAVERSAL', message: '路径穿越检测失败' } };
     }
     if (!existsSync(targetDir)) {
@@ -285,8 +372,7 @@ export function installPlugin(repoDir, skillsDir, name) {
         return { ok: false, error: { code: 'NOT_FOUND', message: `插件 "${name}" 在仓库中不存在` } };
     }
     const targetDir = join(skillsDir, name);
-    const rel = require('path').relative(skillsDir, targetDir);
-    if (!rel || rel.startsWith('..') || rel.startsWith('/')) {
+    if (!isInsideDir(skillsDir, targetDir)) {
         return { ok: false, error: { code: 'PATH_TRAVERSAL', message: '路径穿越检测失败' } };
     }
     try {
@@ -436,6 +522,28 @@ export async function handleApiRequest(req, res, opts) {
                     skillsExists: existsSync(skillsDir),
                 },
                 config: { pollInterval, showSidebarButton, sidebarTitle },
+                // 运行时自检：直接验证两个「会写盘」的操作在**当前模块系统下**可用。
+                // 曾经的 bug 是 ESM 里误用 require，导致 /uninstall 恒返回 INTERNAL_ERROR
+                // 而 HTTP 仍是 200 —— 前端表现为「点了没反应」。这里各跑一次纯路径判定
+                // （不触碰磁盘），有任何异常都会暴露出来。
+                selfTest: (() => {
+                    try {
+                        const okInside = isInsideDir(skillsDir, join(skillsDir, '__probe__'));
+                        const okOutside = !isInsideDir(skillsDir, join(skillsDir, '..', 'x'));
+                        return {
+                            ok: okInside && okOutside,
+                            pathGuard: 'ok',
+                            moduleSystem: typeof require === 'undefined' ? 'esm' : 'cjs',
+                        };
+                    }
+                    catch (e) {
+                        return {
+                            ok: false,
+                            pathGuard: e instanceof Error ? e.message : String(e),
+                            moduleSystem: typeof require === 'undefined' ? 'esm' : 'cjs',
+                        };
+                    }
+                })(),
             });
         }
         else if (sub === '/list' && method === 'GET') {
@@ -468,8 +576,21 @@ export async function handleApiRequest(req, res, opts) {
     }
     catch (error) {
         const msg = error instanceof Error ? error.message : '未知错误';
+        // 打印完整堆栈：曾经这里只打 message，而 `require is not defined` 这类
+        // ESM/CJS 混用错误**只有堆栈才能指出出错行**（当时排查靠猜）。
+        const stack = error instanceof Error ? error.stack : undefined;
         console.error(`[plugin-repo-manager] ERROR sub=${sub}: ${msg}`);
-        sendJson(res, { ok: false, error: { code: 'INTERNAL_ERROR', message: msg } });
+        if (stack)
+            console.error(stack);
+        sendJson(res, {
+            ok: false,
+            error: {
+                code: 'INTERNAL_ERROR',
+                message: msg,
+                // 把首行堆栈回给客户端，前端错误框能直接显示「哪一行炸的」
+                details: stack ? stack.split('\n').slice(0, 3).join('\n') : undefined,
+            },
+        });
     }
 }
 /**
