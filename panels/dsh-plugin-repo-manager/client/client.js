@@ -83,13 +83,28 @@ window.__ModuleLoader__.load({
 
       function load() {
         setLoading(true); setError(null);
-        fetch(apiBase + '/list')
-          .then(function(r) { return r.json(); })
+        var url = apiBase + '/list';
+        fetch(url)
+          .then(function(r) {
+            // 必须先判 HTTP 状态再解析 body。
+            // 后端没注册时返回的是 404 + HTML，直接 r.json() 会抛
+            // "Unexpected token '<'"——把「接口不存在」误报成「JSON 解析失败」，
+            // 排查方向会被带偏。这里把状态码和 URL 一起带进错误里。
+            if (!r.ok) {
+              var err = new Error('HTTP ' + r.status + ' @ ' + url);
+              err.status = r.status; err.url = url;
+              throw err;
+            }
+            return r.json();
+          })
           .then(function(d) {
             if (d.ok && d.plugins) { setPlugins(d.plugins); }
-            else setError(d.error && d.error.message || 'Failed');
+            else setError((d.error && d.error.message) || '接口返回 OK=false');
           })
-          .catch(function(e) { setError(e && e.message || 'Error'); })
+          .catch(function(e) {
+            if (e && e.status) setError(e.message);
+            else setError('请求失败：' + ((e && e.message) || '未知错误') + ' @ ' + url);
+          })
           .finally(function() { setLoading(false); });
       }
 
@@ -158,7 +173,19 @@ window.__ModuleLoader__.load({
       }
 
       if (loading && !plugins.length) return jsxRuntime.jsx('div', { style: {padding:'20px',color:'var(--dsw-alias-label-tertiary)'}, children: zh.loading });
-      if (error && !plugins.length) return jsxRuntime.jsx('div', { style: {padding:'20px'}, children: jsxRuntime.jsx('button', {onClick:load, children: zh.retry}) });
+
+      // 错误态：必须把 error 的**内容**显示出来，并附上诊断信息。
+      // 曾经这里只画了一个「重试」按钮，error 仅当开关用 —— 结果
+      // 「后端没注册(404)」「路径写错」「仓库目录不存在」四种完全不同的
+      // 故障长得一模一样，只能靠猜。诊断信息里给出请求 URL 与已解析的
+      // repoDir，一眼就能判断是哪一种。
+      if (error && !plugins.length) return jsxRuntime.jsx('div', { style: {padding:'20px'} },
+        jsxRuntime.jsx('div', { style: {color:'var(--dsw-alias-state-error-primary)', marginBottom:'8px', wordBreak:'break-all'}, children: error }),
+        jsxRuntime.jsx('div', { style: {fontSize:'12px', color:'var(--dsw-alias-label-tertiary)', marginBottom:'4px', wordBreak:'break-all'}, children: '接口: ' + apiBase + '/list' }),
+        jsxRuntime.jsx('div', { style: {fontSize:'12px', color:'var(--dsw-alias-label-tertiary)', marginBottom:'12px', wordBreak:'break-all'}, children: zh.repoDir + ': ' + repoDir }),
+        jsxRuntime.jsx('button', {onClick:load, style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer'}, children: zh.retry })
+      );
+
       if (!plugins.length) return jsxRuntime.jsx('div', { style: {padding:'40px',textAlign:'center',color:'var(--dsw-alias-label-tertiary)'}, children: zh.empty });
 
       return jsxRuntime.jsx('div', { style: {width:'100%',maxWidth:'900px',padding:'20px'} },

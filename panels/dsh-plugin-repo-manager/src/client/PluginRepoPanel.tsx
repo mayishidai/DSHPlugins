@@ -70,18 +70,26 @@ export function PluginRepoPanel({
   const loadPlugins = useCallback(async () => {
     setLoading(true)
     setError(null)
+    const url = `${apiBase}/list`
     try {
-      const response = await fetch(`${apiBase}/list`)
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const response = await fetch(url)
+      // 必须先判 HTTP 状态再解析 body。
+      // 后端没注册时返回的是 404 + HTML，直接 response.json() 会抛
+      // "Unexpected token '<'" —— 把「接口不存在」误报成「JSON 解析失败」，
+      // 排查方向会被带偏。这里把状态码和 URL 一起带进错误里。
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} @ ${url}`)
+      }
       const data: ApiResponse<RepoPlugin[]> = await response.json()
       if (data.ok && data.plugins) {
         setPlugins(data.plugins)
         setLastUpdate(new Date())
       } else {
-        setError(data.error?.message || '加载失败')
+        setError(data.error?.message || '接口返回 OK=false')
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error')
+      const msg = e instanceof Error ? e.message : '未知错误'
+      setError(msg.includes('@') ? msg : `请求失败：${msg} @ ${url}`)
     } finally {
       setLoading(false)
     }
@@ -227,11 +235,29 @@ export function PluginRepoPanel({
     )
   }
 
+  // 错误态：必须把 error 的**内容**显示出来，并附上诊断信息。
+  // 曾经这里只画了一个「重试」按钮，error 仅当开关用 —— 结果
+  // 「后端没注册(404)」「路径写错」「仓库目录不存在」等完全不同的故障
+  // 长得一模一样，只能靠猜。诊断信息给出请求 URL 与已解析的 repoDir，
+  // 一眼就能判断是哪一种。
   if (error && plugins.length === 0) {
     return (
       <div style={{ padding: '20px' }}>
-        <div style={{ color: 'var(--dsw-alias-state-error-primary)' }}>{error}</div>
-        <button onClick={loadPlugins} style={{ marginTop: '10px' }}>重试</button>
+        <div style={{ color: 'var(--dsw-alias-state-error-primary)', marginBottom: '8px', wordBreak: 'break-all' }}>
+          {error}
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)', marginBottom: '4px', wordBreak: 'break-all' }}>
+          接口: {apiBase}/list
+        </div>
+        <div style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)', marginBottom: '12px', wordBreak: 'break-all' }}>
+          仓库目录: {repoDir}
+        </div>
+        <button
+          onClick={loadPlugins}
+          style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--dsw-alias-border-l3)', background: 'transparent', cursor: 'pointer' }}
+        >
+          重试
+        </button>
       </div>
     )
   }

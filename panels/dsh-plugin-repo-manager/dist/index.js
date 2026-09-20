@@ -109,6 +109,39 @@ function resolveSidebarTitle(ctx) {
     return raw || DEFAULT_CONFIG.sidebarTitle;
 }
 /**
+ * 从请求 URL 中取出「相对本插件前缀」的子路径，并归一化为 `/list` 这种形式。
+ *
+ * ## 为什么不能直接 `url.pathname === '/list'`
+ *
+ * `webServer.register({ kind: 'prefix', path: '/api/plugin-repo' })` 之后，
+ * handler 收到的 `req.url` 到底是**剥掉前缀的** `'/list'`，还是**保留全路径的**
+ * `'/api/plugin-repo/list'`，取决于宿主的实现约定 —— 本仓库没有 DSH 源码，
+ * 这一点**无法在本机验证**。
+ *
+ * 只按其中一种写，另一种下会**全部落进 404 分支**：
+ * 返回 `HTTP 200 + { ok:false, message:'接口不存在' }`，
+ * 前端表现为「插件列表空 + 一个重试按钮」，看起来像后端没起来，极难排查。
+ *
+ * 这里两种都兼容：**先剥掉自己的前缀，剩下的按 `/list` 匹配**。
+ * 无论宿主给的是哪一种形状，都能归一化到同一个子路径。
+ */
+export function normalizeSubPath(pathname, prefix = '/api/plugin-repo') {
+    let p = pathname || '';
+    // 去掉查询串（handler 里用的是 url.pathname，理论上没有，防御性处理）
+    const q = p.indexOf('?');
+    if (q >= 0)
+        p = p.slice(0, q);
+    // 宿主若保留全路径，这里剥掉；若已剥掉，startsWith 不成立则原样保留
+    if (p === prefix)
+        return '/';
+    if (p.startsWith(prefix + '/'))
+        p = p.slice(prefix.length);
+    // 末尾斜杠归一化：'/list/' 与 '/list' 等价
+    if (p.length > 1 && p.endsWith('/'))
+        p = p.slice(0, -1);
+    return p || '/';
+}
+/**
  * 检查名称是否合法（kebab-case）
  */
 function isValidName(name) {
@@ -353,6 +386,92 @@ function readBody(req) {
         req.on('error', reject);
     });
 }
+/** HTTP API 的挂载前缀（唯一定义处，注册与归一化共用）。 */
+export const API_PREFIX = '/api/plugin-repo';
+/**
+ * HTTP API 的请求处理器。
+ *
+ * **刻意抽成独立导出函数**（而不是写在 `apply()` 里）：
+ * 写在 `apply()` 内部的闭包无法被测试直接调用，端到端测试就只能
+ * 「重新实现一遍路由再测」，于是**测的是测试自己的实现，不是产品代码** ——
+ * 上一版就是这样漏掉了路由 bug 的回归。抽出来后 e2e 能直接打真实 handler。
+ */
+export async function handleApiRequest(req, res, opts) {
+    const { repoDir, skillsDir, pollInterval, showSidebarButton, sidebarTitle } = opts;
+    const url = new URL(req.url || '', `http://${req.headers.host}`);
+    const method = req.method || 'GET';
+    // 兼容「宿主剥前缀」与「宿主保留全路径」两种约定，见 normalizeSubPath
+    const sub = normalizeSubPath(url.pathname, API_PREFIX);
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    try {
+        // 自检端点：一条命令看清后端到底起来了没、路径怎么解析的、目录在不在。
+        // 排查「面板空白只有一个重试按钮」时先打这个，能立刻区分
+        // 「路由没命中」「目录不存在」「压根没注册」三种情况。
+        if (sub === '/_health') {
+            const repoExists = existsSync(repoDir);
+            let repoEntryCount = null;
+            if (repoExists) {
+                try {
+                    repoEntryCount = readdirSync(repoDir).filter((n) => isValidName(n)).length;
+                }
+                catch {
+                    repoEntryCount = null;
+                }
+            }
+            sendJson(res, {
+                ok: true,
+                plugin: name,
+                // 路由自检：把两种约定的归一化结果都算出来给排查者看
+                route: {
+                    rawPathname: url.pathname,
+                    normalizedSub: sub,
+                    note: '两者不同即说明宿主保留/剥掉了前缀，本插件两种都兼容',
+                },
+                paths: {
+                    repoDir,
+                    repoExists,
+                    repoEntryCount,
+                    skillsDir,
+                    skillsExists: existsSync(skillsDir),
+                },
+                config: { pollInterval, showSidebarButton, sidebarTitle },
+            });
+        }
+        else if (sub === '/list' && method === 'GET') {
+            const plugins = listPlugins(repoDir, skillsDir);
+            sendJson(res, { ok: true, plugins, pollInterval });
+        }
+        else if (sub === '/install' && method === 'POST') {
+            const body = await readBody(req);
+            const { name: pkgName } = JSON.parse(body || '{}');
+            const result = installPlugin(repoDir, skillsDir, pkgName);
+            sendJson(res, result);
+        }
+        else if (sub === '/uninstall' && method === 'POST') {
+            const body = await readBody(req);
+            const { name: pkgName } = JSON.parse(body || '{}');
+            const result = uninstallPlugin(skillsDir, pkgName);
+            sendJson(res, result);
+        }
+        else {
+            // 带上实际收到的路径与归一化结果，方便排查路径约定不一致
+            console.warn(`[plugin-repo-manager] NOT_FOUND sub=${sub} raw=${url.pathname}`);
+            sendJson(res, {
+                ok: false,
+                error: {
+                    code: 'NOT_FOUND',
+                    message: `接口不存在：${sub}（原始路径 ${url.pathname}）`,
+                },
+            });
+        }
+    }
+    catch (error) {
+        const msg = error instanceof Error ? error.message : '未知错误';
+        console.error(`[plugin-repo-manager] ERROR sub=${sub}: ${msg}`);
+        sendJson(res, { ok: false, error: { code: 'INTERNAL_ERROR', message: msg } });
+    }
+}
 /**
  * 主 apply 函数
  */
@@ -367,37 +486,9 @@ export async function apply(ctx) {
     if (webServer) {
         webServer.register({
             kind: 'prefix',
-            path: '/api/plugin-repo',
-            handler: async (req, res) => {
-                const url = new URL(req.url || '', `http://${req.headers.host}`);
-                const method = req.method || 'GET';
-                res.setHeader('Content-Type', 'application/json');
-                res.setHeader('Access-Control-Allow-Origin', '*');
-                try {
-                    if (url.pathname === '/list' && method === 'GET') {
-                        const plugins = listPlugins(repoDir, skillsDir);
-                        sendJson(res, { ok: true, plugins, pollInterval });
-                    }
-                    else if (url.pathname === '/install' && method === 'POST') {
-                        const body = await readBody(req);
-                        const { name } = JSON.parse(body || '{}');
-                        const result = installPlugin(repoDir, skillsDir, name);
-                        sendJson(res, result);
-                    }
-                    else if (url.pathname === '/uninstall' && method === 'POST') {
-                        const body = await readBody(req);
-                        const { name } = JSON.parse(body || '{}');
-                        const result = uninstallPlugin(skillsDir, name);
-                        sendJson(res, result);
-                    }
-                    else {
-                        sendJson(res, { ok: false, error: { code: 'NOT_FOUND', message: '接口不存在' } });
-                    }
-                }
-                catch (error) {
-                    sendJson(res, { ok: false, error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : '未知错误' } });
-                }
-            }
+            path: API_PREFIX,
+            // 转发到唯一实现（见 handleApiRequest 的注释：抽出来是为了能被测到）
+            handler: (req, res) => handleApiRequest(req, res, { repoDir, skillsDir, pollInterval, showSidebarButton, sidebarTitle }),
         });
         console.log(`[plugin-repo-manager] HTTP API registered at /api/plugin-repo`);
         console.log(`[plugin-repo-manager] repoDir: ${repoDir}`);

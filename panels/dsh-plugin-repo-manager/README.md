@@ -48,6 +48,56 @@ DSH 插件：从**主界面侧边栏**或设置面板管理自定义插件仓库
 > 关闭时是**整个不注册槽位**，而不是「注册后渲染 `null`」。渲染 `null` 仍会占位，
 > 仍可能被宿主画出分隔线或引起布局抖动。
 
+## 排查：面板空白、只有一个「重试」按钮
+
+面板加载失败时会显示**具体错误 + 请求 URL + 仓库目录**（不再只给一个按钮）。
+先在 NAS 上用 `curl` 打自检端点，一次看清全部状态：
+
+```bash
+curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
+```
+
+返回示例（正常）：
+
+```json
+{
+  "ok": true,
+  "plugin": "dsh-plugin-repo-manager",
+  "route": {
+    "rawPathname": "/api/plugin-repo/_health",
+    "normalizedSub": "/_health",
+    "note": "两者不同即说明宿主保留/剥掉了前缀，本插件两种都兼容"
+  },
+  "paths": {
+    "repoDir": "/vol1/1000/AI/DSHPlugin/skills",
+    "repoExists": true,
+    "repoEntryCount": 17,
+    "skillsDir": "/root/.dsh/skills",
+    "skillsExists": true
+  },
+  "config": { "pollInterval": 3000, "showSidebarButton": true, "sidebarTitle": "插件仓库" }
+}
+```
+
+对照表：
+
+| 现象 | 含义 | 处理 |
+|---|---|---|
+| `curl` 连不上 / connection refused | DSH 没在 2298 上跑 | 检查 DSH 进程 |
+| `404 找不到页面`（DSH 自己的 404） | **插件没注册上** | 重跑 `bash scripts/install-to-profile.sh` 并重启 |
+| `{"ok":false,"error":{"code":"NOT_FOUND"...}}` | 路由命中了插件但子路径不匹配 | 看 `error.message` 里的实际路径；本插件两种前缀约定都兼容，若仍出现请反馈 |
+| `ok:true` 但 `repoExists:false` | **仓库目录不对** | 改 `cordis.patch.yml` 的 `repoDir` |
+| `ok:true` 且 `repoEntryCount:0` | 目录在但**没有合法插件子目录** | 确认 `repoDir` 指向 `DSHPlugins/skills`（含插件子目录那层），不是仓库根 |
+| `ok:true` 且 `skillsExists:false` | 安装目标目录不存在 | 确认 `skillsDir` 与 DSH 实际扫描目录一致（见下方「skillsDir 陷阱」） |
+
+### `skillsDir` 陷阱
+
+`skillsDir` 优先级：`cordis.patch.yml` 的 `skillsDir` > `DSH_PLUGIN_SKILLS_DIR` > `$DSH_HOME/skills`。
+
+若 NAS 的 `DSH_HOME` 与 patch 里写死的 `~/.dsh/skills` **不一致**，
+面板会把技能装到 DSH 扫不到的地方 —— **装了不生效，且不报错**。
+用 `_health` 的 `skillsDir` 与 DSH 实际扫描目录比对即可确认。
+
 ## 版本与更新机制
 
 ### 版本号来源
@@ -133,7 +183,7 @@ bash ../../scripts/uninstall-from-profile.sh
 ```bash
 npm install          # 首次
 npm run build        # 服务端 tsc + 客户端 bundle
-npm test             # 三项测试
+npm test             # 七套测试，共 166 例
 npm run typecheck    # 0 error
 ```
 
@@ -194,12 +244,30 @@ dsh-plugin-repo-manager/
 ├── tsconfig.build.json     # 编译配置（输出到 dist/）
 ├── generate-client.mjs     # 客户端 bundle 生成脚本
 └── scripts/
-    ├── install.sh          # 转发桩（唯一实现在仓库根 scripts/）
-    ├── test-isnewer.mjs    # 版本比较单元测试（23 例）
-    ├── test-install-update.mjs  # 安装/更新流程端到端测试（24 例）
-    ├── test-paths.mjs      # 路径解析测试（14 例）
-    └── test-sidebar.mjs    # 侧边栏配置与注册测试（35 例）
+    ├── install.sh              # 转发桩（唯一实现在仓库根 scripts/）
+    ├── test-isnewer.mjs        # 版本比较单元测试（23 例）
+    ├── test-install-update.mjs # 安装/更新流程端到端测试（24 例）
+    ├── test-paths.mjs          # 路径解析测试（14 例）
+    ├── test-sidebar.mjs        # 侧边栏配置与注册测试（35 例）
+    ├── test-client-parity.mjs  # 源码 / bundle 副本一致性（18 例）
+    ├── test-route-prefix.mjs   # 路由前缀归一化（25 例）
+    └── test-api-e2e.mjs        # HTTP API 端到端，真起 server（27 例）
 ```
+
+### HTTP API
+
+| 端点 | 方法 | 说明 |
+|---|---|---|
+| `/api/plugin-repo/_health` | GET | **自检**：路由解析、目录存在性、条目数、生效配置 |
+| `/api/plugin-repo/list` | GET | 列出所有插件（含 `hasUpdate`） |
+| `/api/plugin-repo/install` | POST | 安装 / 更新（body: `{"name":"..."}`） |
+| `/api/plugin-repo/uninstall` | POST | 卸载（body: `{"name":"..."}`） |
+
+> **路由前缀兼容**：`webServer.register({kind:'prefix', path:'/api/plugin-repo'})` 之后，
+> handler 收到的 `req.url` 是「剥掉前缀的 `/list`」还是「保留全路径的
+> `/api/plugin-repo/list`」，取决于宿主实现约定。本插件通过 `normalizeSubPath()`
+> **两种都兼容** —— 只按其中一种写的话，另一种下所有请求都会落进 404 分支，
+> 前端表现为「列表空 + 一个重试按钮」，看起来像后端没起来。
 
 ## 与官方实现的区别
 
@@ -237,7 +305,7 @@ npm run typecheck
 # 编译（服务端 → dist/，客户端 → client/client.js）
 npm run build
 
-# 测试（版本比较 23 例 + 安装更新 24 例 + 路径 14 例 + 侧边栏 35 例）
+# 测试（23+24+14+35+18+25+27 = 166 例）
 npm test
 ```
 

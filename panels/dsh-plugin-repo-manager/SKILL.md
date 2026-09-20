@@ -81,6 +81,27 @@ bash scripts/uninstall-from-profile.sh
 
 只写入 DSH 的 **profile 目录**（用户数据区），**不修改 DSH 运行时源码**。
 
+## 排查：面板空白、只有一个「重试」按钮
+
+面板加载失败会显示**具体错误 + 请求 URL + 仓库目录**。先用自检端点一次看清状态：
+
+```bash
+curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
+```
+
+| 现象 | 含义 | 处理 |
+|---|---|---|
+| connection refused | DSH 没跑 | 检查进程 |
+| DSH 自己的 404 页面 | **插件没注册上** | 重跑 `scripts/install-to-profile.sh` 并重启 |
+| `ok:false, code:NOT_FOUND` | 路由命中但子路径不匹配 | 看 `error.message` 里的实际路径 |
+| `repoExists:false` | **仓库目录不对** | 改 `cordis.patch.yml` 的 `repoDir` |
+| `repoEntryCount:0` | 目录在但无合法插件子目录 | `repoDir` 应指向 `DSHPlugins/skills` |
+| `skillsExists:false` | 安装目标目录不存在 | 核对 `skillsDir` 与 DSH 实际扫描目录 |
+
+> ⚠️ **`skillsDir` 陷阱**：其优先级为 patch 的 `skillsDir` > `DSH_PLUGIN_SKILLS_DIR`
+> > `$DSH_HOME/skills`。若 NAS 的 `DSH_HOME` 与 patch 写死的 `~/.dsh/skills` 不一致，
+> 面板会把技能装到 DSH 扫不到的地方 —— **装了不生效且不报错**。
+
 ## 版本与更新
 
 - 版本号解析顺序：`manifest.json` → `package.json` → `version.json`
@@ -129,7 +150,7 @@ bash scripts/uninstall-from-profile.sh
 npm install          # 首次
 npm run typecheck    # 期望 0 error
 npm run build        # 服务端 → dist/，客户端 → client/client.js
-npm test             # 23 + 24 + 14 + 35 例
+npm test             # 七套，共 166 例
 ```
 
 > 改过 `src/client/*` 或 `generate-client.mjs` 后必须重跑 `npm run build`；
