@@ -1,4 +1,4 @@
-.PHONY: build install install-all install-panel uninstall uninstall-panel list check verify test typecheck sync-skill sync-skill-dry help
+.PHONY: build install install-all install-panel uninstall uninstall-panel list check verify test typecheck sync-skill sync-skill-dry update-panel help
 
 # DSHPlugins 便捷命令。
 #
@@ -39,6 +39,9 @@ install-all: ## 安装 skills/ 下所有技能到 DSH
 
 install-panel: build ## 安装面板插件到 DSH profile（会先编译）
 	bash scripts/install-to-profile.sh
+
+update-panel: ## 拉取最新并重装面板插件（git pull + install，等价于 install-panel 的「先更新」版）
+	bash scripts/update-and-install.sh
 
 uninstall-panel: ## 从 DSH profile 卸载面板插件
 	bash scripts/uninstall-from-profile.sh

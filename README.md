@@ -93,6 +93,18 @@ make install-panel                 # 会先编译，再装到 DSH profile
 bash scripts/install-to-profile.sh
 ```
 
+**日常更新用这条**（`git pull` + 重装，两步都不能少）：
+
+```bash
+bash scripts/update-and-install.sh          # 等价于 make update-panel
+bash scripts/update-and-install.sh --skills # 顺便重装 skills/ 下全部技能
+```
+
+> ⚠️ 只 `git pull` 是**不够的**：DSH 读的是 profile 里**复制过去的独立副本**（非软链接），
+> 拉取只更新「源」，已装那份纹丝不动 → 现象是「改了没效果」。
+> 反过来只重装不拉取，装的还是旧的。
+> 该脚本内部用相对路径定位自身，且**只转发**到 `install-to-profile.sh`（不重写落点逻辑）。
+
 **这个脚本只写入 DSH 的 profile 目录**（用户数据区
 `dsh-data/profiles/web`），做三件事：
 
@@ -172,7 +184,8 @@ DSHPlugins/
 │   ├── validate_repo.py            #   结构/契约校验（零依赖）
 │   ├── gen-manifest.py             #   从 SKILL.md 生成 manifest（含上游溯源登记表）
 │   ├── sync-skill-to-workbuddy.py  #   仓库 skills/ → ~/.workbuddy/skills/（幂等）
-│   ├── install-to-profile.sh       #   安装面板 → DSH profile
+│   ├── install-to-profile.sh       #   安装面板 → DSH profile（唯一实现）
+│   ├── update-and-install.sh       #   拉取 + 重装（转发到上一条，不重写落点）
 │   ├── uninstall-from-profile.sh   #   从 profile 卸载
 │   ├── start-dsh-with-plugin.sh    #   以 --patch 方式临时加载（不改源码）
 │   ├── install-plugin-repo.sh      #   已废弃，执行即退出并提示新方式

@@ -37,6 +37,34 @@ DSHPlugins/
 
 ## 安装步骤
 
+### 0. 一条命令：拉取 + 安装（推荐日常更新用）
+
+```bash
+cd /vol1/1000/AI/DSHPlugin
+bash scripts/update-and-install.sh
+```
+
+它只做两件事：**在已有仓库里 `git pull`** → **转发到 `scripts/install-to-profile.sh`**。
+
+> ⚠️ 为什么不能只 `git pull`：DSH 读的是 profile 里**复制过去的独立副本**（不是软链接），
+> 所以 `git pull` 只更新「源」，已装的那份**纹丝不动** —— 看起来就是「改了没效果」。
+> 而只重装不拉取，装的还是旧的。两步都得做。
+
+常用变体：
+
+| 命令 | 作用 |
+|---|---|
+| `bash scripts/update-and-install.sh` | 拉取 + 重装面板（默认） |
+| `bash scripts/update-and-install.sh --skills` | 顺便重装 `skills/` 下全部技能 |
+| `bash scripts/update-and-install.sh --no-pull` | 只重装，不拉取（本地已改好时用） |
+| `make update-panel` | 等价的 make 目标 |
+
+> 工作区**有未提交改动时会拒绝拉取并以 3 退出**（不静默 stash/覆盖），
+> 避免把你的本地修改冲掉。此时请先 commit/stash，或加 `--no-pull`。
+> 脚本内部用 `SCRIPT_DIR`/`REPO_ROOT` 相对定位自身，**仓库放任何目录都能跑**。
+
+装完仍需**重启 DSH** 才生效。
+
 ### 1. 装到 DSH profile
 
 **只用这一个脚本**（在 NAS 上、仓库根执行）：
@@ -116,8 +144,10 @@ DSH 默认监听 `2298`。
 若 DSH 重装/升级导致 profile 的 `node_modules` 被重建，重跑一次即可恢复（幂等）：
 
 ```bash
-cd /vol1/1000/AI/DSHPlugin && bash scripts/install-to-profile.sh
+cd /vol1/1000/AI/DSHPlugin && bash scripts/update-and-install.sh
 ```
+
+（只想要「装」不想要「拉」，用 `bash scripts/install-to-profile.sh`。）
 
 > 安装脚本按 `dependencies` 的 key（= 包名）把插件放到
 > `node_modules/dsh-plugin-repo-manager`，与包名严格对应，

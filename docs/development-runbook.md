@@ -29,6 +29,7 @@
 | 刷新 manifest | `python3 scripts/gen-manifest.py "$(cygpath -w "$(pwd)")" [名字...]` |
 | 编译面板插件 | `make build` |
 | 装 / 卸面板到 DSH profile | `make install-panel` / `make uninstall-panel` |
+| 拉取最新并重装面板 | `make update-panel`（= `bash scripts/update-and-install.sh`；加 `--skills` 连技能一起装） |
 | 面板测试 / 类型检查 | `make test` / `make typecheck` |
 
 > ⚠️ **不存在的脚本**：`install-plugin.sh`、`uninstall-plugin.sh`、`sync-to-dsh.sh`、

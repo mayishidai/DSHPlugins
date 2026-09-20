@@ -85,14 +85,22 @@ make install NAME=lucky-api     # 或 make install-all
    ├── tsc -p tsconfig.build.json  →  dist/index.js   （服务端编译产物）
    └── node generate-client.mjs    →  client/client.js（客户端自包含 bundle）
                     ↓ 产物提交进 git
-目标机: git pull
-   └── bash scripts/install-to-profile.sh
+目标机: bash scripts/update-and-install.sh     ← 日常只跑这一条
+   ├── git pull                                 （更新「源」）
+   └── 转发 → bash scripts/install-to-profile.sh
           ├── 复制 dist/ + client/ + cordis.patch.yml → profile/node_modules/<name>/
           ├── python3 更新 profile package.json（dependencies + dsh.profile.bundles）
           └── 备份原 package.json
                     ↓
              重启 DSH → 面板出现在主界面侧边栏 + 「设置 → 插件」
 ```
+
+> ⚠️ **`git pull` ≠ 已安装**。DSH 读的是 profile 里**复制过去的独立副本**（不是软链接），
+> 所以 `git pull` 只让「仓库目录」变新，已装那份不变 → 现象是「更新了没效果」。
+> 两步必须都做，`update-and-install.sh` 就是把这两步包成一条命令。
+>
+> 顺带一个不对称：插件的 `repoDir` 只指向 `skills/`，所以**面板能感知技能更新，
+> 却看不见 `panels/` —— 面板无法更新自己**，必须手工重跑安装脚本。
 
 ### 3.3 两条硬性约束
 
@@ -116,7 +124,8 @@ DSH 也不保证会帮你转译 TypeScript。`scripts/preflight.sh` 与
 
 | 方式 | 命令 | 特点 |
 |------|------|------|
-| profile 注册 | `scripts/install-to-profile.sh` | 持久，随 DSH 启动自动加载 |
+| profile 注册 | `scripts/install-to-profile.sh` | 持久，随 DSH 启动自动加载（**唯一实现**） |
+| 拉取+注册 | `scripts/update-and-install.sh` | 先 `git pull` 再转发到上一条 |
 | patch 叠加 | `scripts/start-dsh-with-plugin.sh` | 临时，用 `--patch` 运行时叠加 |
 
 
