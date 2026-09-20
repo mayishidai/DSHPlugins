@@ -8,13 +8,17 @@
 
 | 目录 | 放什么 | 当前收录 |
 |---|---|---|
-| [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/)、[cloudflare-tunnel](skills/cloudflare-tunnel/)、[jdgold](skills/jdgold/)、[Cloudflare 官方技能 14 个](docs/upstream/cloudflare-skills/) |
+| [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [game-dev-workflow](skills/game-dev-workflow/)、[lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/)、[cloudflare-tunnel](skills/cloudflare-tunnel/)、[jdgold](skills/jdgold/)、[Cloudflare 官方技能 14 个](docs/upstream/cloudflare-skills/) |
 | [`agents/`](agents/) | **智能体 / 专家包**（角色定义，非能力） | _暂无_ |
 | [`mcps/`](mcps/) | **MCP 服务配置**（配置片段 + 启动脚本，不含凭据） | [hindsight](mcps/hindsight/) |
 | [`panels/`](panels/) | **运行时面板插件**（DSH extensions 双半包，带 UI） | [dsh-plugin-repo-manager](panels/dsh-plugin-repo-manager/) |
 
 ### 亮点
 
+- **game-dev-workflow**（技能） - 游戏开发全流程团队协作系统
+  - 策划设计 → 程序拆单实现 ∥ 美术 UI/动效/特效设计 → 表现接入调优 → QA → BUG 修复 → 复盘沉淀
+  - 强制全程留痕（项目根 `gameflow/` 痕迹目录，与代码分离，WS-ID 全链路关联），适配多 agent 并行开发
+  - 含角色章程 / 操作 runbook / 模板 / 经验回流（`references/`）与 `gf.sh` 入口
 - **dsh-plugin-repo-manager**（面板） - 主界面侧边栏图标按钮 + 设置面板 tab 里的「我的插件仓库」
   - 侧边栏按钮入口 / Skill 列表展示 / 安装卸载（带确认）/ 批量操作 / 轮询刷新（默认 3 秒）
 - **lucky-api**（技能） - 调用自建 Lucky 实例的 HTTP API

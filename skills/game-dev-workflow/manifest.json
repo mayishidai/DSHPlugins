@@ -1,0 +1,13 @@
+{
+  "name": "game-dev-workflow",
+  "version": "1.0.0",
+  "description": "游戏开发全流程团队协作系统（策划设计 → 程序拆单实现 ∥ 美术UI/动效/特效设计 → 表现接入调优 → QA → BUG修复 → 复盘沉淀）。只要涉及游戏项目的新需求/灵感落地、设计文档撰写、任务拆单、UI/动效/特效设计、功能实现、接入联调、性能与手感调优、测试QA、BUG处理跟踪、项目复盘、经验教训查询沉淀，或需要多 agent 并行开发一个游戏功能，就必须使用本 skill。",
+  "author": "DSHPlugin",
+  "type": "skill",
+  "license": "未注明",
+  "whenToUse": "涉及游戏项目的新需求/灵感落地、设计文档撰写、任务拆单、UI/动效/特效设计、功能实现、接入联调、性能与手感调优、测试QA、BUG处理跟踪、项目复盘、经验教训沉淀，或需要多 agent 并行开发一个游戏功能时。",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  }
+}
