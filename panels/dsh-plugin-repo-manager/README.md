@@ -278,7 +278,7 @@ dsh-plugin-repo-manager/
     ├── test-install-update.mjs # 安装/更新流程端到端测试（24 例）
     ├── test-paths.mjs          # 路径解析测试（14 例）
     ├── test-sidebar.mjs        # 侧边栏配置与注册测试（35 例）
-    ├── test-client-parity.mjs  # 源码 / bundle 副本一致性（25 例）
+    ├── test-client-parity.mjs  # 源码 / bundle 副本一致性（31 例，含布局尺寸同款检查）
     ├── test-route-prefix.mjs   # 路由前缀归一化（25 例）
     ├── test-api-e2e.mjs        # HTTP API 端到端，真起 server（27 例）
     └── test-esm-safety.mjs     # ESM 里禁用 require + 描述字段（22 例）
@@ -302,6 +302,25 @@ dsh-plugin-repo-manager/
 > `/api/plugin-repo/list`」，取决于宿主实现约定。本插件通过 `normalizeSubPath()`
 > **两种都兼容** —— 只按其中一种写的话，另一种下所有请求都会落进 404 分支，
 > 前端表现为「列表空 + 一个重试按钮」，看起来像后端没起来。
+
+### 布局尺寸（紧凑档）
+
+面板按「提高信息密度」设计，数值统一如下。**改尺寸必须同步改两处**
+（`src/client/PluginRepoPanel.tsx` 与 `generate-client.mjs`），
+否则由 `test-client-parity.mjs` 第 [9] 节拦下。
+
+| 位置 | 值 | 说明 |
+|---|---|---|
+| 面板外层 | `padding: 12px 14px` | 原 20px |
+| 表格单元格 | `padding: 6px` | 原 `12px 8px` |
+| 表头 | `padding: 5px 6px` | 原 8px |
+| 按钮 | `padding: 4px 10px` | 原 `6px 12px`；不再压，否则可点性下降 |
+| 工具栏 | `marginBottom: 10px` / `gap: 6px` | 时间戳移到右侧组，避免被挤成两行 |
+| 设置面板 | 三项**并排一行** | 原纵向 grid，占大半屏高 |
+| 表格 | `tableLayout: fixed` + 列宽百分比 | 描述列靠 table-layout 分宽度，不用 `maxWidth` |
+| 描述列 | 仍 `WebkitLineClamp: 2` | 刻意不压到 1 行，否则多数描述读不出信息 |
+
+实测：5 行插件时面板总高 **595px → 459px（-22.9%）**，每屏多放一行。
 
 ## 与官方实现的区别
 

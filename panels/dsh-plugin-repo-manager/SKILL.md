@@ -128,6 +128,17 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 `package.json` 取第一个命中的；都取不到返回 `null`（**不编造内容**）。
 新增插件时**至少给一处描述**，否则面板该列显示 `—`。
 
+## 布局尺寸（紧凑档）
+
+面板按「提高信息密度」设计。**改尺寸必须同步改两处** ——
+`src/client/PluginRepoPanel.tsx`（开发读的那份）与 `generate-client.mjs`
+（真正打进 `client.js` 的那份）。漏改一处就是本项目**第 5 次副本漂移**，
+而且照样「编译过、测试绿、不报错」。现由 `test-client-parity.mjs` 第 [9] 节
+直接比对两份的尺寸数值集合拦下。
+
+关键值：外层 `12px 14px` / 单元格 `6px` / 表头 `5px 6px` / 按钮 `4px 10px` /
+表格 `tableLayout: fixed` / 设置面板三项并排。详见 `README.md`。
+
 ## 版本与更新
 
 - 版本号解析顺序：`manifest.json` → `package.json` → `version.json`
@@ -176,9 +187,12 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 npm install          # 首次
 npm run typecheck    # 期望 0 error
 npm run build        # 服务端 → dist/，客户端 → client/client.js
-npm test             # 七套，共 166 例
+npm test             # 八套，共 201 例
 ```
 
 > 改过 `src/client/*` 或 `generate-client.mjs` 后必须重跑 `npm run build`；
 > `dist/` 与 `client/client.js` 是**要提交入库的产物**。
+>
+> **只改样式也算改 `src/client/*`** —— 两份实现的尺寸数值必须一致，
+> 由 `test-client-parity.mjs` 第 [9] 节守住。
 

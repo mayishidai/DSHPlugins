@@ -191,107 +191,110 @@ window.__ModuleLoader__.load({
         setSelected(n);
       }
 
-      if (loading && !plugins.length) return jsxRuntime.jsx('div', { style: {padding:'20px',color:'var(--dsw-alias-label-tertiary)'}, children: zh.loading });
+      if (loading && !plugins.length) return jsxRuntime.jsx('div', { style: {padding:'12px 14px',color:'var(--dsw-alias-label-tertiary)'}, children: zh.loading });
 
       // 错误态：必须把 error 的**内容**显示出来，并附上诊断信息。
       // 曾经这里只画了一个「重试」按钮，error 仅当开关用 —— 结果
       // 「后端没注册(404)」「路径写错」「仓库目录不存在」四种完全不同的
       // 故障长得一模一样，只能靠猜。诊断信息里给出请求 URL 与已解析的
       // repoDir，一眼就能判断是哪一种。
-      if (error && !plugins.length) return jsxRuntime.jsx('div', { style: {padding:'20px'} },
-        jsxRuntime.jsx('div', { style: {color:'var(--dsw-alias-state-error-primary)', marginBottom:'8px', wordBreak:'break-all'}, children: error }),
-        jsxRuntime.jsx('div', { style: {fontSize:'12px', color:'var(--dsw-alias-label-tertiary)', marginBottom:'4px', wordBreak:'break-all'}, children: '接口: ' + apiBase + '/list' }),
-        jsxRuntime.jsx('div', { style: {fontSize:'12px', color:'var(--dsw-alias-label-tertiary)', marginBottom:'12px', wordBreak:'break-all'}, children: zh.repoDir + ': ' + repoDir }),
-        jsxRuntime.jsx('button', {onClick:load, style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer'}, children: zh.retry })
+      if (error && !plugins.length) return jsxRuntime.jsx('div', { style: {padding:'12px 14px'} },
+        jsxRuntime.jsx('div', { style: {color:'var(--dsw-alias-state-error-primary)', marginBottom:'6px', wordBreak:'break-all', fontSize:'13px'}, children: error }),
+        jsxRuntime.jsx('div', { style: {fontSize:'12px', color:'var(--dsw-alias-label-tertiary)', marginBottom:'2px', wordBreak:'break-all', lineHeight:1.4}, children: '接口: ' + apiBase + '/list' }),
+        jsxRuntime.jsx('div', { style: {fontSize:'12px', color:'var(--dsw-alias-label-tertiary)', marginBottom:'10px', wordBreak:'break-all', lineHeight:1.4}, children: zh.repoDir + ': ' + repoDir }),
+        jsxRuntime.jsx('button', {onClick:load, style:{padding:'4px 10px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'13px'}, children: zh.retry })
       );
 
-      if (!plugins.length) return jsxRuntime.jsx('div', { style: {padding:'40px',textAlign:'center',color:'var(--dsw-alias-label-tertiary)'}, children: zh.empty });
+      if (!plugins.length) return jsxRuntime.jsx('div', { style: {padding:'24px',textAlign:'center',color:'var(--dsw-alias-label-tertiary)'}, children: zh.empty });
 
-      return jsxRuntime.jsx('div', { style: {width:'100%',maxWidth:'900px',padding:'20px'} },
-        jsxRuntime.jsx('div', { style: {display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'} },
-          jsxRuntime.jsx('div', { style: {display:'flex',gap:'8px',alignItems:'center'} },
-            jsxRuntime.jsx('button', {onClick:load,disabled:loading,style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer'}}, loading ? zh.refreshing : zh.refresh),
-            jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)',fontSize:'12px'}}, 'Updated: ' + lastUpdate.toLocaleTimeString())
+      return jsxRuntime.jsx('div', { style: {width:'100%',maxWidth:'900px',padding:'12px 14px'} },
+        // 头部：紧凑单行 —— 左侧只有刷新，时间戳放到右侧组内，窄面板下不会挤成两行。
+        jsxRuntime.jsx('div', { style: {display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'10px'} },
+          jsxRuntime.jsx('div', { style: {display:'flex',gap:'6px',alignItems:'center'} },
+            jsxRuntime.jsx('button', {onClick:load,disabled:loading,style:{padding:'4px 10px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'13px'}}, loading ? zh.refreshing : zh.refresh)
           ),
-          jsxRuntime.jsx('div', { style: {display:'flex',gap:'8px',alignItems:'center'} },
-            plugins.some(function(p){return p.installed && p.hasUpdate;}) && jsxRuntime.jsx('button', {onClick:updateAll,style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)',cursor:'pointer'}}, '⬆ Update All (' + plugins.filter(function(p){return p.installed && p.hasUpdate;}).length + ')'),
-            selected.size > 0 && jsxRuntime.jsx('div', {style:{display:'flex',gap:'8px'}},
-              jsxRuntime.jsx('button', {onClick:function(){for(var n of selected) install(n); setSelected(new Set());},style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-success-bg)',color:'var(--dsw-alias-state-success-primary)',cursor:'pointer'}}, 'Install ('+selected.size+')'),
-              jsxRuntime.jsx('button', {onClick:function(){for(var n of selected) uninstall(n); setSelected(new Set());},style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-error-bg)',color:'var(--dsw-alias-state-error-primary)',cursor:'pointer'}}, 'Uninstall ('+selected.size+')')
+          jsxRuntime.jsx('div', { style: {display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap',justifyContent:'flex-end'} },
+            jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)',fontSize:'12px'}}, lastUpdate.toLocaleTimeString()),
+            plugins.some(function(p){return p.installed && p.hasUpdate;}) && jsxRuntime.jsx('button', {onClick:updateAll,style:{padding:'4px 10px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)',cursor:'pointer',fontSize:'13px'}}, '⬆ Update All (' + plugins.filter(function(p){return p.installed && p.hasUpdate;}).length + ')'),
+            selected.size > 0 && jsxRuntime.jsx('div', {style:{display:'flex',gap:'6px'}},
+              jsxRuntime.jsx('button', {onClick:function(){for(var n of selected) install(n); setSelected(new Set());},style:{padding:'4px 10px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-success-bg)',color:'var(--dsw-alias-state-success-primary)',cursor:'pointer',fontSize:'13px'}}, 'Install ('+selected.size+')'),
+              jsxRuntime.jsx('button', {onClick:function(){for(var n of selected) uninstall(n); setSelected(new Set());},style:{padding:'4px 10px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-error-bg)',color:'var(--dsw-alias-state-error-primary)',cursor:'pointer',fontSize:'13px'}}, 'Uninstall ('+selected.size+')')
             ),
-            jsxRuntime.jsx('button', {onClick:function(){setShowSettings(!showSettings);},style:{padding:'6px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer'}}, '⚙ Settings')
+            jsxRuntime.jsx('button', {onClick:function(){setShowSettings(!showSettings);},style:{padding:'4px 10px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'13px'}}, '⚙ Settings')
           )
         ),
-        notice && jsxRuntime.jsx('div', {style:{marginBottom:'12px',padding:'8px 12px',borderRadius:'6px',fontSize:'12px',background:'var(--dsw-alias-state-success-bg)',color:'var(--dsw-alias-state-success-primary)',display:'flex',justifyContent:'space-between',alignItems:'center'}},
+        notice && jsxRuntime.jsx('div', {style:{marginBottom:'8px',padding:'5px 10px',borderRadius:'5px',fontSize:'12px',background:'var(--dsw-alias-state-success-bg)',color:'var(--dsw-alias-state-success-primary)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px'}},
           jsxRuntime.jsx('span', null, notice),
-          jsxRuntime.jsx('button', {onClick:function(){setNotice(null);},style:{padding:'2px 8px',borderRadius:'4px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'12px'}}, 'Close')
+          jsxRuntime.jsx('button', {onClick:function(){setNotice(null);},style:{padding:'2px 8px',borderRadius:'4px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'12px',flexShrink:0}}, 'Close')
         ),
-        showSettings && jsxRuntime.jsx('div', {style:{marginBottom:'16px',padding:'16px',background:'var(--dsw-alias-bg-layer-2)',borderRadius:'8px'}},
-          jsxRuntime.jsx('h3', {style:{margin:'0 0 12px'}}, zh.settings),
-          jsxRuntime.jsx('div', {style:{display:'grid',gap:'12px'}},
+        // 设置：三项并排一行（原先是纵向 grid，占掉大半屏高度）。
+        showSettings && jsxRuntime.jsx('div', {style:{marginBottom:'10px',padding:'10px 12px',background:'var(--dsw-alias-bg-layer-2)',borderRadius:'6px'}},
+          jsxRuntime.jsx('div', {style:{display:'flex',gap:'16px',flexWrap:'wrap',alignItems:'flex-end'}},
             jsxRuntime.jsx('div', null,
-              jsxRuntime.jsx('label', {style:{display:'block',fontSize:'12px',color:'var(--dsw-alias-label-secondary)',marginBottom:'4px'}}, zh.pollInterval),
-              jsxRuntime.jsx('input', {type:'number',min:'500',step:'500',value:pollInterval,onChange:function(e){var n=parseInt(e.target.value); if(!isNaN(n)&&n>=500) setPollInterval(n);},style:{padding:'6px 10px',borderRadius:'4px',border:'1px solid var(--dsw-alias-border-l3)',width:'120px'}})
+              jsxRuntime.jsx('label', {style:{display:'block',fontSize:'12px',color:'var(--dsw-alias-label-secondary)',marginBottom:'2px'}}, zh.pollInterval),
+              jsxRuntime.jsx('input', {type:'number',min:'500',step:'500',value:pollInterval,onChange:function(e){var n=parseInt(e.target.value); if(!isNaN(n)&&n>=500) setPollInterval(n);},style:{padding:'3px 8px',borderRadius:'4px',border:'1px solid var(--dsw-alias-border-l3)',width:'100px'}})
             ),
-            jsxRuntime.jsx('div', null,
-              jsxRuntime.jsx('label', {style:{display:'block',fontSize:'12px',color:'var(--dsw-alias-label-secondary)',marginBottom:'4px'}}, zh.repoDir),
-              jsxRuntime.jsx('code', {style:{fontFamily:'monospace',fontSize:'12px'}}, repoDir)
+            jsxRuntime.jsx('div', {style:{flex:'1 1 240px',minWidth:0}},
+              jsxRuntime.jsx('label', {style:{display:'block',fontSize:'12px',color:'var(--dsw-alias-label-secondary)',marginBottom:'2px'}}, zh.repoDir),
+              jsxRuntime.jsx('code', {style:{fontFamily:'monospace',fontSize:'12px',display:'block',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}, repoDir)
             )
           )
         ),
-        jsxRuntime.jsx('table', {style:{width:'100%',borderCollapse:'collapse'}},
+        jsxRuntime.jsx('table', {style:{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}},
           jsxRuntime.jsx('thead', null,
             jsxRuntime.jsx('tr', {style:{borderBottom:'1px solid var(--dsw-alias-border-l2)'}},
-              jsxRuntime.jsx('th', {style:{padding:'8px',width:'40px'}}, jsxRuntime.jsx('input', {type:'checkbox',checked:selected.size===plugins.length&&plugins.length>0,onChange:function(e){e.target.checked?setSelected(new Set(plugins.map(function(p){return p.name;}))):setSelected(new Set());}})),
-              jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'left'}}, 'Plugin'),
-              jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'left'}}, zh.description),
-              jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'left'}}, 'Version'),
-              jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'center'}}, 'Status'),
-              jsxRuntime.jsx('th', {style:{padding:'8px',textAlign:'right'}}, 'Action')
+              jsxRuntime.jsx('th', {style:{padding:'5px 4px',width:'32px'}}, jsxRuntime.jsx('input', {type:'checkbox',checked:selected.size===plugins.length&&plugins.length>0,onChange:function(e){e.target.checked?setSelected(new Set(plugins.map(function(p){return p.name;}))):setSelected(new Set());}})),
+              jsxRuntime.jsx('th', {style:{padding:'5px 6px',textAlign:'left',width:'22%'}}, 'Plugin'),
+              jsxRuntime.jsx('th', {style:{padding:'5px 6px',textAlign:'left'}}, zh.description),
+              jsxRuntime.jsx('th', {style:{padding:'5px 6px',textAlign:'left',width:'96px'}}, 'Version'),
+              jsxRuntime.jsx('th', {style:{padding:'5px 6px',textAlign:'center',width:'76px'}}, 'Status'),
+              jsxRuntime.jsx('th', {style:{padding:'5px 6px',textAlign:'right',width:'152px'}}, 'Action')
             )
           ),
           jsxRuntime.jsx('tbody', null, plugins.map(function(plugin) {
             return jsxRuntime.jsx('tr', {key:plugin.name,style:{borderBottom:'1px solid var(--dsw-alias-border-l3)'}},
-              jsxRuntime.jsx('td', {style:{padding:'12px 8px',textAlign:'center'}}, jsxRuntime.jsx('input', {type:'checkbox',checked:selected.has(plugin.name),onChange:function(){toggle(plugin.name);}})),
-              jsxRuntime.jsx('td', {style:{padding:'12px 8px'}}, jsxRuntime.jsx('div', {style:{fontWeight:500}}, plugin.name)),
+              jsxRuntime.jsx('td', {style:{padding:'6px 4px',textAlign:'center'}}, jsxRuntime.jsx('input', {type:'checkbox',checked:selected.has(plugin.name),onChange:function(){toggle(plugin.name);}})),
+              jsxRuntime.jsx('td', {style:{padding:'6px',verticalAlign:'top'}},
+                jsxRuntime.jsx('div', {style:{fontWeight:500}}, plugin.name)
+              ),
               // 描述列：两行截断 + title 悬停看全文（与 React 源同款行为）
-              jsxRuntime.jsx('td', {style:{padding:'12px 8px',maxWidth:'320px'}},
+              jsxRuntime.jsx('td', {style:{padding:'6px',verticalAlign:'top'}},
                 plugin.description
-                  ? jsxRuntime.jsx('span', {title:plugin.description, style:{display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',fontSize:'12px',lineHeight:1.5,color:'var(--dsw-alias-label-secondary)'}}, plugin.description)
+                  ? jsxRuntime.jsx('span', {title:plugin.description, style:{display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',fontSize:'12px',lineHeight:1.4,color:'var(--dsw-alias-label-secondary)'}}, plugin.description)
                   : jsxRuntime.jsx('span', {style:{fontSize:'12px',color:'var(--dsw-alias-label-tertiary)'}}, '—')
               ),
-              jsxRuntime.jsx('td', {style:{padding:'12px 8px',color:'var(--dsw-alias-label-tertiary)'}},
+              jsxRuntime.jsx('td', {style:{padding:'6px',color:'var(--dsw-alias-label-tertiary)',verticalAlign:'top',fontSize:'12px'}},
                 plugin.version || '—',
                 plugin.installed && plugin.installedVersion && plugin.installedVersion !== plugin.version && jsxRuntime.jsx('div', {style:{fontSize:'11px'}}, 'Installed: ' + plugin.installedVersion),
-                plugin.installed && plugin.hasUpdate && jsxRuntime.jsx('div', {style:{display:'inline-block',marginTop:'4px',padding:'1px 6px',borderRadius:'8px',fontSize:'11px',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)'}}, 'Update available')
+                plugin.installed && plugin.hasUpdate && jsxRuntime.jsx('div', {style:{display:'inline-block',marginTop:'2px',padding:'0 5px',borderRadius:'8px',fontSize:'11px',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)'}}, 'Update available')
               ),
-              jsxRuntime.jsx('td', {style:{padding:'12px 8px',textAlign:'center'}},
+              jsxRuntime.jsx('td', {style:{padding:'6px',textAlign:'center',verticalAlign:'top'}},
                 plugin.installed
                   ? jsxRuntime.jsx('span', {style:{
-                      display:'inline-block',padding:'2px 8px',borderRadius:'12px',fontSize:'12px',
+                      display:'inline-block',padding:'1px 7px',borderRadius:'10px',fontSize:'12px',whiteSpace:'nowrap',
                       background: plugin.hasUpdate ? 'var(--dsw-alias-state-warning-bg, #fff7e6)' : 'var(--dsw-alias-state-success-bg)',
                       color: plugin.hasUpdate ? 'var(--dsw-alias-state-warning-primary, #b26b00)' : 'var(--dsw-alias-state-success-primary)'
                     }, children: plugin.hasUpdate ? 'Update available' : zh.installed})
-                  : jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)'}, children: zh.notInstalled})
+                  : jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)',fontSize:'12px'}, children: zh.notInstalled})
               ),
-              jsxRuntime.jsx('td', {style:{padding:'12px 8px',textAlign:'right'}},
-                !plugin.installed && !actionLoading ? jsxRuntime.jsx('button', {onClick:function(){setConfirm({type:'install',name:plugin.name});},style:{padding:'4px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer'}}, zh.install)
-                : actionLoading === plugin.name ? jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)'}, children: zh.installing})
+              jsxRuntime.jsx('td', {style:{padding:'6px',textAlign:'right',verticalAlign:'top',whiteSpace:'nowrap'}},
+                !plugin.installed && !actionLoading ? jsxRuntime.jsx('button', {onClick:function(){setConfirm({type:'install',name:plugin.name});},style:{padding:'4px 10px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'13px'}}, zh.install)
+                : actionLoading === plugin.name ? jsxRuntime.jsx('span', {style:{color:'var(--dsw-alias-label-tertiary)',fontSize:'12px'}, children: zh.installing})
                 : plugin.installed ? [
-                    plugin.hasUpdate && jsxRuntime.jsx('button', {key:'u', onClick:function(){setConfirm({type:'update',name:plugin.name});},style:{padding:'4px 12px',marginRight:'4px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)',cursor:'pointer'}}, 'Update'),
-                    jsxRuntime.jsx('button', {key:'d', onClick:function(){setConfirm({type:'uninstall',name:plugin.name});},style:{padding:'4px 12px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-error-bg)',color:'var(--dsw-alias-state-error-primary)',cursor:'pointer'}}, zh.uninstall)
+                    plugin.hasUpdate && jsxRuntime.jsx('button', {key:'u', onClick:function(){setConfirm({type:'update',name:plugin.name});},style:{padding:'4px 10px',marginRight:'4px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)',cursor:'pointer',fontSize:'13px'}}, 'Update'),
+                    jsxRuntime.jsx('button', {key:'d', onClick:function(){setConfirm({type:'uninstall',name:plugin.name});},style:{padding:'4px 10px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'var(--dsw-alias-state-error-bg)',color:'var(--dsw-alias-state-error-primary)',cursor:'pointer',fontSize:'13px'}}, zh.uninstall)
                   ] : null
               )
             );
           }))
         ),
         confirm && jsxRuntime.jsx('div', {style:{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}},
-          jsxRuntime.jsx('div', {style:{background:'var(--dsw-alias-bg-layer-3)',padding:'24px',borderRadius:'12px',maxWidth:'400px',width:'90%'}},
-            jsxRuntime.jsx('h3', {style:{margin:'0 0 16px'}}, confirm.type==='uninstall' ? zh.confirmUninstall : zh.confirmInstall),
-            jsxRuntime.jsx('p', {style:{margin:'0 0 24px'}}, (confirm.type==='uninstall' ? zh.confirmUninstallMsg : zh.confirmInstallMsg).replace('{{name}}', confirm.name)),
-            jsxRuntime.jsx('div', {style:{display:'flex',gap:'12px',justifyContent:'flex-end'}},
-              jsxRuntime.jsx('button', {onClick:function(){setConfirm(null);},style:{padding:'8px 16px',borderRadius:'6px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer'}}, 'Cancel'),
-              jsxRuntime.jsx('button', {onClick:function(){confirm.type==='uninstall'?uninstall(confirm.name):install(confirm.name);},style:{padding:'8px 16px',borderRadius:'6px',border:'none',background:confirm.type==='uninstall'?'var(--dsw-alias-state-error-primary)':'var(--dsw-alias-state-success-primary)',color:'white',cursor:'pointer'}}, 'Confirm')
+          jsxRuntime.jsx('div', {style:{background:'var(--dsw-alias-bg-layer-3)',padding:'18px 20px',borderRadius:'10px',maxWidth:'400px',width:'90%'}},
+            jsxRuntime.jsx('h3', {style:{margin:'0 0 10px',fontSize:'15px'}}, confirm.type==='uninstall' ? zh.confirmUninstall : zh.confirmInstall),
+            jsxRuntime.jsx('p', {style:{margin:'0 0 16px',fontSize:'13px',lineHeight:1.5}}, (confirm.type==='uninstall' ? zh.confirmUninstallMsg : zh.confirmInstallMsg).replace('{{name}}', confirm.name)),
+            jsxRuntime.jsx('div', {style:{display:'flex',gap:'8px',justifyContent:'flex-end'}},
+              jsxRuntime.jsx('button', {onClick:function(){setConfirm(null);},style:{padding:'5px 14px',borderRadius:'5px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'13px'}}, 'Cancel'),
+              jsxRuntime.jsx('button', {onClick:function(){confirm.type==='uninstall'?uninstall(confirm.name):install(confirm.name);},style:{padding:'5px 14px',borderRadius:'5px',border:'none',background:confirm.type==='uninstall'?'var(--dsw-alias-state-error-primary)':'var(--dsw-alias-state-success-primary)',color:'white',cursor:'pointer',fontSize:'13px'}}, 'Confirm')
             )
           )
         )
@@ -356,7 +359,7 @@ window.__ModuleLoader__.load({
                 title: title,
                 'aria-label': title,
                 onClick: function(){ if(props.navigateTo) props.navigateTo('settings.plugins.tab.' + TAB_SLOT_ID); },
-                style: { display:'flex', alignItems:'center', justifyContent:'center', width:'100%', padding:'8px', border:'none', background:'transparent', color:'inherit', cursor:'pointer', borderRadius:'6px' }
+                style: { display:'flex', alignItems:'center', justifyContent:'center', width:'100%', padding:'6px', border:'none', background:'transparent', color:'inherit', cursor:'pointer', borderRadius:'5px' }
               }, jsxRuntime.jsx(PackageIcon, {}));
             }
           );

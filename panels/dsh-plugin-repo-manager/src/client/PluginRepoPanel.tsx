@@ -245,7 +245,7 @@ export function PluginRepoPanel({
 
   if (loading && plugins.length === 0) {
     return (
-      <div style={{ padding: '20px', color: 'var(--dsw-alias-label-tertiary)' }}>
+      <div style={{ padding: '12px 14px', color: 'var(--dsw-alias-label-tertiary)' }}>
         加载中...
       </div>
     )
@@ -258,19 +258,19 @@ export function PluginRepoPanel({
   // 一眼就能判断是哪一种。
   if (error && plugins.length === 0) {
     return (
-      <div style={{ padding: '20px' }}>
-        <div style={{ color: 'var(--dsw-alias-state-error-primary)', marginBottom: '8px', wordBreak: 'break-all' }}>
+      <div style={{ padding: '12px 14px' }}>
+        <div style={{ color: 'var(--dsw-alias-state-error-primary)', marginBottom: '6px', wordBreak: 'break-all', fontSize: '13px' }}>
           {error}
         </div>
-        <div style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)', marginBottom: '4px', wordBreak: 'break-all' }}>
+        <div style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)', marginBottom: '2px', wordBreak: 'break-all', lineHeight: 1.4 }}>
           接口: {apiBase}/list
         </div>
-        <div style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)', marginBottom: '12px', wordBreak: 'break-all' }}>
+        <div style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)', marginBottom: '10px', wordBreak: 'break-all', lineHeight: 1.4 }}>
           仓库目录: {repoDir}
         </div>
         <button
           onClick={loadPlugins}
-          style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--dsw-alias-border-l3)', background: 'transparent', cursor: 'pointer' }}
+          style={{ padding: '4px 10px', borderRadius: '5px', border: '1px solid var(--dsw-alias-border-l3)', background: 'transparent', cursor: 'pointer', fontSize: '13px' }}
         >
           重试
         </button>
@@ -279,10 +279,11 @@ export function PluginRepoPanel({
   }
 
   return (
-    <div className={className} style={{ width: '100%', maxWidth: '900px', padding: '20px' }}>
-      {/* 头部工具栏 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+    <div className={className} style={{ width: '100%', maxWidth: '900px', padding: '12px 14px' }}>
+      {/* 头部工具栏：紧凑单行 —— 左侧只有「刷新」，时间戳移到右侧
+          （原先 time 与按钮同组，窄面板下会把右侧按钮挤到第二行）。 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           <button
             onClick={loadPlugins}
             disabled={loading}
@@ -290,11 +291,11 @@ export function PluginRepoPanel({
           >
             {loading ? '⟳ 刷新中...' : '⟳ 刷新'}
           </button>
-          <span style={{ color: 'var(--dsw-alias-label-tertiary)', fontSize: '12px' }}>
-            最后更新: {lastUpdate.toLocaleTimeString()}
-          </span>
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <span style={{ color: 'var(--dsw-alias-label-tertiary)', fontSize: '12px' }}>
+            {lastUpdate.toLocaleTimeString()}
+          </span>
           {plugins.some(p => p.installed && p.hasUpdate) && (
             <button
               onClick={handleUpdateAll}
@@ -304,7 +305,7 @@ export function PluginRepoPanel({
             </button>
           )}
           {selected.size > 0 && (
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '6px' }}>
               <button
                 onClick={handleBatchInstall}
                 style={{ ...styles.button, background: 'var(--dsw-alias-state-success-bg)', color: 'var(--dsw-alias-state-success-primary)' }}
@@ -331,24 +332,24 @@ export function PluginRepoPanel({
       {/* 操作结果提示 */}
       {notice && (
         <div style={{
-          marginBottom: '12px', padding: '8px 12px', borderRadius: '6px',
+          marginBottom: '8px', padding: '5px 10px', borderRadius: '5px',
           fontSize: '12px', background: 'var(--dsw-alias-state-success-bg)',
           color: 'var(--dsw-alias-state-success-primary)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
         }}>
           <span>{notice}</span>
           <button onClick={() => setNotice(null)} style={{ ...styles.smallButton }}>关闭</button>
         </div>
       )}
 
-      {/* 设置面板 */}
+      {/* 设置面板：三项并排一行（原先是纵向 grid，很占高度）。
+          窄屏时 flexWrap 自动折回纵向堆叠。 */}
       {showSettings && (
-        <div style={{ marginBottom: '16px', padding: '16px', background: 'var(--dsw-alias-bg-layer-2)', borderRadius: '8px' }}>
-          <h3 style={{ margin: '0 0 12px' }}>设置</h3>
-          <div style={{ display: 'grid', gap: '12px' }}>
+        <div style={{ marginBottom: '10px', padding: '10px 12px', background: 'var(--dsw-alias-bg-layer-2)', borderRadius: '6px' }}>
+          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div>
               <label style={styles.label}>轮询间隔 (毫秒)</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <input
                   type="number"
                   min="500"
@@ -362,16 +363,16 @@ export function PluginRepoPanel({
                 </span>
               </div>
             </div>
-            <div>
+            <div style={{ flex: '1 1 240px', minWidth: 0 }}>
               <label style={styles.label}>仓库目录</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <code style={styles.code}>{repoDir}</code>
                 <button onClick={() => openInExplorer(repoDir)} style={styles.smallButton}>打开</button>
               </div>
             </div>
-            <div>
+            <div style={{ flex: '1 1 240px', minWidth: 0 }}>
               <label style={styles.label}>Skills 目录</label>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <code style={styles.code}>{skillsDir}</code>
                 <button onClick={() => openInExplorer(skillsDir)} style={styles.smallButton}>打开</button>
               </div>
@@ -382,14 +383,14 @@ export function PluginRepoPanel({
 
       {/* 插件列表 */}
       {plugins.length === 0 ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--dsw-alias-label-tertiary)' }}>
+        <div style={{ padding: '24px', textAlign: 'center', color: 'var(--dsw-alias-label-tertiary)' }}>
           仓库中没有插件
         </div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--dsw-alias-border-l2)' }}>
-              <th style={{ padding: '8px', width: '40px' }}>
+              <th style={{ padding: '5px 4px', width: '32px' }}>
                 <input
                   type="checkbox"
                   checked={selected.size === plugins.length && plugins.length > 0}
@@ -399,31 +400,32 @@ export function PluginRepoPanel({
                   }}
                 />
               </th>
-              <th style={{ padding: '8px', textAlign: 'left' }}>插件名称</th>
-              <th style={{ padding: '8px', textAlign: 'left' }}>描述</th>
-              <th style={{ padding: '8px', textAlign: 'left' }}>版本</th>
-              <th style={{ padding: '8px', textAlign: 'center' }}>状态</th>
-              <th style={{ padding: '8px', textAlign: 'right' }}>操作</th>
+              <th style={{ padding: '5px 6px', textAlign: 'left', width: '22%' }}>插件名称</th>
+              <th style={{ padding: '5px 6px', textAlign: 'left' }}>描述</th>
+              <th style={{ padding: '5px 6px', textAlign: 'left', width: '96px' }}>版本</th>
+              <th style={{ padding: '5px 6px', textAlign: 'center', width: '76px' }}>状态</th>
+              <th style={{ padding: '5px 6px', textAlign: 'right', width: '152px' }}>操作</th>
             </tr>
           </thead>
           <tbody>
             {plugins.map(plugin => (
               <tr key={plugin.name} style={{ borderBottom: '1px solid var(--dsw-alias-border-l3)' }}>
-                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                <td style={{ padding: '6px 4px', textAlign: 'center' }}>
                   <input
                     type="checkbox"
                     checked={selected.has(plugin.name)}
                     onChange={() => toggleSelect(plugin.name)}
                   />
                 </td>
-                <td style={{ padding: '12px 8px' }}>
+                <td style={{ padding: '6px', verticalAlign: 'top' }}>
                   <div style={{ fontWeight: 500 }}>{plugin.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.4 }}>
                     {plugin.repoDirName}
                   </div>
                 </td>
-                {/* 描述列：长描述截断显示，完整内容放 title 里，鼠标悬停可看全 */}
-                <td style={{ padding: '12px 8px', maxWidth: '320px' }}>
+                {/* 描述列：长描述截断显示，完整内容放 title 里，鼠标悬停可看全。
+                    行数上限 2 是刻意的 —— 压到 1 行会让绝大多数描述都读不出信息。 */}
+                <td style={{ padding: '6px', verticalAlign: 'top' }}>
                   {plugin.description ? (
                     <span
                       title={plugin.description}
@@ -433,8 +435,9 @@ export function PluginRepoPanel({
                         WebkitBoxOrient: 'vertical',
                         overflow: 'hidden',
                         fontSize: '12px',
-                        lineHeight: 1.5,
+                        lineHeight: 1.4,
                         color: 'var(--dsw-alias-label-secondary)',
+                        wordBreak: 'break-word',
                       } as React.CSSProperties}
                     >
                       {plugin.description}
@@ -443,14 +446,14 @@ export function PluginRepoPanel({
                     <span style={{ fontSize: '12px', color: 'var(--dsw-alias-label-tertiary)' }}>—</span>
                   )}
                 </td>
-                <td style={{ padding: '12px 8px', color: 'var(--dsw-alias-label-tertiary)' }}>
+                <td style={{ padding: '6px', color: 'var(--dsw-alias-label-tertiary)', verticalAlign: 'top', fontSize: '12px' }}>
                   {plugin.version || '—'}
                   {plugin.installed && plugin.installedVersion && plugin.installedVersion !== plugin.version && (
                     <div style={{ fontSize: '11px' }}>已装: {plugin.installedVersion}</div>
                   )}
                   {plugin.installed && plugin.hasUpdate && (
                     <div style={{
-                      display: 'inline-block', marginTop: '4px', padding: '1px 6px',
+                      display: 'inline-block', marginTop: '2px', padding: '0 5px',
                       borderRadius: '8px', fontSize: '11px',
                       background: 'var(--dsw-alias-state-warning-bg, #fff7e6)',
                       color: 'var(--dsw-alias-state-warning-primary, #b26b00)',
@@ -459,13 +462,14 @@ export function PluginRepoPanel({
                     </div>
                   )}
                 </td>
-                <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                <td style={{ padding: '6px', textAlign: 'center', verticalAlign: 'top' }}>
                   {plugin.installed ? (
                     <span style={{
                       display: 'inline-block',
-                      padding: '2px 8px',
-                      borderRadius: '12px',
+                      padding: '1px 7px',
+                      borderRadius: '10px',
                       fontSize: '12px',
+                      whiteSpace: 'nowrap',
                       background: plugin.hasUpdate
                         ? 'var(--dsw-alias-state-warning-bg, #fff7e6)'
                         : 'var(--dsw-alias-state-success-bg)',
@@ -476,10 +480,10 @@ export function PluginRepoPanel({
                       {plugin.hasUpdate ? '可更新' : '已安装'}
                     </span>
                   ) : (
-                    <span style={{ color: 'var(--dsw-alias-label-tertiary)' }}>未安装</span>
+                    <span style={{ color: 'var(--dsw-alias-label-tertiary)', fontSize: '12px' }}>未安装</span>
                   )}
                 </td>
-                <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                <td style={{ padding: '6px', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
                   {!plugin.installed && !actionLoading ? (
                     <button
                       onClick={() => setShowConfirm({ type: 'install', name: plugin.name })}
@@ -488,7 +492,7 @@ export function PluginRepoPanel({
                       安装
                     </button>
                   ) : actionLoading === plugin.name ? (
-                    <span style={{ color: 'var(--dsw-alias-label-tertiary)' }}>处理中...</span>
+                    <span style={{ color: 'var(--dsw-alias-label-tertiary)', fontSize: '12px' }}>处理中...</span>
                   ) : plugin.installed ? (
                     <>
                       {plugin.hasUpdate && (
@@ -525,26 +529,28 @@ export function PluginRepoPanel({
           background: 'rgba(0,0,0,0.5)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', zIndex: 1000,
         }}>
-          <div style={{ background: 'var(--dsw-alias-bg-layer-3)', padding: '24px', borderRadius: '12px', maxWidth: '400px', width: '90%' }}>
-            <h3 style={{ margin: '0 0 16px' }}>
+          <div style={{ background: 'var(--dsw-alias-bg-layer-3)', padding: '18px 20px', borderRadius: '10px', maxWidth: '400px', width: '90%' }}>
+            <h3 style={{ margin: '0 0 10px', fontSize: '15px' }}>
               {showConfirm.type === 'uninstall' ? '确认卸载'
                 : showConfirm.type === 'update' ? '确认更新' : '确认安装'}
             </h3>
-            <p style={{ margin: '0 0 24px' }}>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', lineHeight: 1.5 }}>
               {showConfirm.type === 'uninstall'
                 ? `确定要卸载 "${showConfirm.name}" 吗？此操作不可撤销。`
                 : showConfirm.type === 'update'
                   ? `确定要更新 "${showConfirm.name}" 吗？将用仓库中的新版本覆盖已装版本，旧版本会留档备份（记录在 version.json 的 previousVersion / backupDir）。`
                   : `确定要安装 "${showConfirm.name}" 吗？将从仓库复制到 skills 目录。`}
             </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowConfirm(null)} style={styles.button}>取消</button>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowConfirm(null)} style={{ ...styles.button, padding: '5px 14px' }}>取消</button>
               <button
                 onClick={() => showConfirm.type === 'uninstall'
                   ? handleUninstall(showConfirm.name)
                   : handleInstall(showConfirm.name)}
                 style={{
                   ...styles.button,
+                  padding: '5px 14px',
+                  border: 'none',
                   background: showConfirm.type === 'uninstall'
                     ? 'var(--dsw-alias-state-error-primary)'
                     : 'var(--dsw-alias-state-success-primary)',
@@ -562,44 +568,54 @@ export function PluginRepoPanel({
 }
 
 // 样式
+// 尺寸统一按「紧凑」一档取值：按钮 4px 10px / 表格单元格 6px / 间距 6~10px。
+// 唯一 consciously 不压的是「可点击目标」—— 按钮高度保持在 24px 上下，
+// 再小会明显影响可点性；描述列仍保留 2 行。
 const styles: Record<string, React.CSSProperties> = {
   button: {
-    padding: '6px 12px',
-    borderRadius: '6px',
+    padding: '4px 10px',
+    borderRadius: '5px',
     border: '1px solid var(--dsw-alias-border-l3)',
     background: 'transparent',
     color: 'var(--dsw-alias-label-primary)',
     cursor: 'pointer',
     fontSize: '13px',
+    lineHeight: 1.5,
   },
   smallButton: {
-    padding: '4px 8px',
+    padding: '2px 8px',
     borderRadius: '4px',
     border: '1px solid var(--dsw-alias-border-l3)',
     background: 'transparent',
     color: 'var(--dsw-alias-label-secondary)',
     cursor: 'pointer',
     fontSize: '12px',
+    lineHeight: 1.5,
+    flexShrink: 0,
   },
   label: {
     display: 'block',
     fontSize: '12px',
     color: 'var(--dsw-alias-label-secondary)',
-    marginBottom: '4px',
+    marginBottom: '2px',
   },
   input: {
-    padding: '6px 10px',
+    padding: '3px 8px',
     borderRadius: '4px',
     border: '1px solid var(--dsw-alias-border-l3)',
     background: 'var(--dsw-alias-bg-layer-1)',
     color: 'var(--dsw-alias-label-primary)',
     fontSize: '13px',
-    width: '120px',
+    width: '100px',
   },
   code: {
     fontFamily: 'monospace',
     fontSize: '12px',
     color: 'var(--dsw-alias-label-secondary)',
     flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
 }

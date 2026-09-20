@@ -128,6 +128,46 @@ console.log('\n[8. 卸载失败必须可见（第 4 次漂移候选）]')
 bothHave('卸载失败设置可见错误（含插件名）', /卸载\s*'?\s*\+?\s*name|卸载 \$\{name\}/)
 check('bundle 后台 error.details 也带给用户看', /error\.details|\.details/.test(clientJs))
 
+console.log('\n[9. 布局尺寸数值必须两边同款（第 5 次漂移候选，2026-09-20 补）]')
+// 起因：把 UI 调紧凑时，改了 src 那份、漏改 generate-client.mjs，
+// 于是「开发时看到的」和「用户实际跑到的」尺寸不一致 —— 又一次
+// 「编译过、测试绿、不报错」。这里直接把两份的**尺寸数值集合**做对称差，
+// 只要能找出「只在一边出现的数值」就说明漂移。
+//
+// 判据为什么用「数值集合」而不是逐字比对：
+//   源码内联写 `padding: '6px'`，生成器写 `padding:'6px'`（无空格），
+//   逐字比必然全红。只比**数值本身**是否两边都出现，既能抓住真漂移，
+//   又不受书写风格影响。
+const DIM_PROPS = 'padding|marginBottom|fontSize|marginTop|width|height|gap|borderRadius|lineHeight|maxWidth'
+const dimRe = new RegExp(`(?:${DIM_PROPS})\\s*:\\s*'([^']+)'`, 'g')
+function collectDims(text) {
+  const s = new Set()
+  let m
+  dimRe.lastIndex = 0
+  while ((m = dimRe.exec(text))) s.add(m[1])
+  return s
+}
+const dimsSrc = collectDims(panelSrc)
+const dimsGen = collectDims(bundleGen)
+const onlyInSrc = [...dimsSrc].filter(v => !dimsGen.has(v))
+const onlyInGen = [...dimsGen].filter(v => !dimsSrc.has(v))
+check(
+  `尺寸数值集合一致（源码 ${dimsSrc.size} 种 / 生成器 ${dimsGen.size} 种）`,
+  onlyInSrc.length === 0 && onlyInGen.length === 0,
+  `\n      仅在源码: ${onlyInSrc.length ? onlyInSrc.join(', ') : '(无)'}` +
+  `\n      仅在生成器: ${onlyInGen.length ? onlyInGen.join(', ') : '(无)'}`
+)
+// 紧凑化的关键取值必须真的落进产物里（防止「源码改了但忘了 build」）
+for (const [label, needle] of [
+  ['产物用了紧凑外层内边距', "padding:'12px 14px'"],
+  ['产物用了紧凑表格单元格内边距', "padding:'6px'"],
+  ['产物用了紧凑表头内边距', "padding:'5px 6px'"],
+  ['产物用了紧凑按钮内边距', "padding:'4px 10px'"],
+  ['产物表格启用 fixed 布局（描述列宽度交给 table-layout）', "tableLayout:'fixed'"],
+]) {
+  check(label, clientJs.includes(needle), needle)
+}
+
 console.log(`\n结果: ${pass} 通过 / ${fail} 失败 / 共 ${pass + fail} 例`)
 if (fail > 0) {
   console.log('\n两份实现已经漂移。请同步修改：')
