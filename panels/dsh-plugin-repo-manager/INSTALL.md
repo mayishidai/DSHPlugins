@@ -62,7 +62,13 @@ DSH 默认监听 `2298`。
 
 ### 3. 验证
 
-打开 `http://127.0.0.1:2298/` → 设置 → 插件 → 「我的插件仓库」。
+打开 `http://127.0.0.1:2298/`，两种进法任选：
+
+- **主界面左侧竖条** → 点 📦 箱子图标（插件仓库面板）
+- 设置 → 插件 → 「我的插件仓库」tab
+
+两者渲染同一个面板。侧边栏按钮若不想显示，在 `cordis.patch.yml` 里设
+`showSidebarButton: false`（或环境变量 `DSH_PLUGIN_SHOW_SIDEBAR=false`）后重启。
 
 若启动时仍报
 `invalid plugin, expect function or object with an "apply" method, received undefined`，

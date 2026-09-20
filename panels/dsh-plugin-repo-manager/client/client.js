@@ -245,35 +245,66 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // 内联 SVG 图标（package / 箱子）。
+    // 不用宿主提供的 icon 名：名字写错时宿主**不报错**，只静默显示空白，
+    // 属于「看着像没问题、其实没生效」的失效。自绘 SVG 不依赖宿主图标集，
+    // currentColor 还能自动跟随侧边栏深浅色主题。
+    function PackageIcon(props) {
+      var size = (props && props.size) || 20;
+      return jsxRuntime.jsx('svg', {
+        width: size, height: size, viewBox: '0 0 24 24',
+        fill: 'none', stroke: 'currentColor',
+        strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round',
+        'aria-hidden': 'true', focusable: 'false',
+        children: [
+          jsxRuntime.jsx('path', { d: 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z', key: 'box' }),
+          jsxRuntime.jsx('path', { d: 'm3.3 7 8.7 5 8.7-5', key: 'lid' }),
+          jsxRuntime.jsx('path', { d: 'M12 22V12', key: 'edge' })
+        ]
+      });
+    }
+
     // Apply
     function apply(ctx) {
       var NS = 'settings.pluginRepo';
-      var config = ctx.get && ctx.get('pluginRepoConfig') || {};
+      var SIDEBAR_SLOT_ID = 'plugin-repo-btn';
+      var TAB_SLOT_ID = 'plugin-repo';
+      var config = (ctx.get && ctx.get('pluginRepoConfig')) || {};
       var pollInterval = config.pollInterval || 3000;
       var repoDir = config.repoDir || '/vol1/1000/AI/DSHPlugin/skills';
       var skillsDir = config.skillsDir || '';
+      // 默认 true：配置缺失时保持旧行为，不能因为宿主没注入配置就把按钮弄丢。
+      var showSidebarButton = config.showSidebarButton !== false;
+      var sidebarTitle = config.sidebarTitle || '';
 
       ctx.effect(function() { return ctx.locale && ctx.locale.register(NS, {zh:zh, en:en}); }, 'dsh-plugin-repo-manager: dictionaries');
       var t = ctx.locale && ctx.locale.bind ? ctx.locale.bind(NS) : function(k) { return zh[k] || k; };
+      var title = sidebarTitle || t('sidebar');
 
       if (ctx.slots && ctx.slots.inject) {
         ctx.slots.inject('settings.plugins.tab', function() {
           return ctx.slots.register(
-            { name:'settings.plugins.tab', id:'plugin-repo', order:20, label:function(){return t('tab');}, locale:NS },
+            { name:'settings.plugins.tab', id:TAB_SLOT_ID, order:20, label:function(){return t('tab');}, locale:NS },
             function(props) { return jsxRuntime.jsx(PluginRepoPanel, {apiBase:'/api/plugin-repo', pollInterval:pollInterval, repoDir:repoDir, skillsDir:skillsDir}); }
           );
         });
       }
 
-      if (ctx.slots && ctx.slots.inject) {
+      // 主界面侧边栏（图标按钮）。
+      // false 时整个**不注册**，而不是「注册后渲染 null」—— 渲染 null 仍会占位，
+      // 仍可能被宿主画出分隔线或引起布局抖动，只有不注册才是真正拿掉。
+      if (showSidebarButton && ctx.slots && ctx.slots.inject) {
         ctx.slots.inject('sidebar', function() {
           return ctx.slots.register(
-            { name:'sidebar', id:'plugin-repo-btn', order:100, icon:'package', label:function(){return t('sidebar');} },
+            { name:'sidebar', id:SIDEBAR_SLOT_ID, order:100, icon:'package', label:function(){return title;} },
             function(props) {
-              return jsxRuntime.jsx('div', {
-                onClick:function(){ if(props.navigateTo) props.navigateTo('settings.plugins.tab.plugin-repo'); },
-                style:{cursor:'pointer',padding:'8px'}
-              }, t('sidebar'));
+              return jsxRuntime.jsx('button', {
+                type: 'button',
+                title: title,
+                'aria-label': title,
+                onClick: function(){ if(props.navigateTo) props.navigateTo('settings.plugins.tab.' + TAB_SLOT_ID); },
+                style: { display:'flex', alignItems:'center', justifyContent:'center', width:'100%', padding:'8px', border:'none', background:'transparent', color:'inherit', cursor:'pointer', borderRadius:'6px' }
+              }, jsxRuntime.jsx(PackageIcon, {}));
             }
           );
         });

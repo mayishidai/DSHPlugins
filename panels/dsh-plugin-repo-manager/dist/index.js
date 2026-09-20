@@ -71,6 +71,44 @@ function resolvePollInterval(ctx) {
         ?? 3000;
 }
 /**
+ * 解析「是否显示主界面侧边栏按钮」。
+ *
+ * 优先级：`config.showSidebarButton` > `DSH_PLUGIN_SHOW_SIDEBAR` > 默认 true。
+ *
+ * 布尔解析刻意宽容：配置文件（YAML/JSON）与环境变量都只能给字符串，
+ * `"false"` / `"0"` / `"no"` / `"off"` 都必须识别为 false —— 若用
+ * `Boolean(raw)` 判断，字符串 `"false"` 是**真值**，会导致「在配置里关掉、
+ * 实际却仍然显示」这种最难排查的失效。
+ * 不认识的写法一律回退到默认值，避免拼错配置项把按钮弄丢。
+ */
+function resolveShowSidebarButton(ctx) {
+    const config = ctx.get?.('config');
+    const fromConfig = config?.['showSidebarButton'];
+    const raw = (fromConfig !== undefined ? fromConfig : process.env['DSH_PLUGIN_SHOW_SIDEBAR']);
+    if (raw === undefined || raw === null || raw === '')
+        return DEFAULT_CONFIG.showSidebarButton;
+    if (typeof raw === 'boolean')
+        return raw;
+    if (typeof raw === 'number')
+        return raw !== 0;
+    const s = String(raw).trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(s))
+        return true;
+    if (['0', 'false', 'no', 'off'].includes(s))
+        return false;
+    return DEFAULT_CONFIG.showSidebarButton;
+}
+/**
+ * 解析侧边栏按钮标题（hover 提示 / 无障碍标签）。
+ */
+function resolveSidebarTitle(ctx) {
+    const config = ctx.get?.('config');
+    const raw = config?.['sidebarTitle']
+        ?? process.env['DSH_PLUGIN_SIDEBAR_TITLE']
+        ?? DEFAULT_CONFIG.sidebarTitle;
+    return raw || DEFAULT_CONFIG.sidebarTitle;
+}
+/**
  * 检查名称是否合法（kebab-case）
  */
 function isValidName(name) {
@@ -322,6 +360,8 @@ export async function apply(ctx) {
     const repoDir = resolveRepoDir(ctx);
     const skillsDir = resolveSkillsDir(ctx);
     const pollInterval = resolvePollInterval(ctx);
+    const showSidebarButton = resolveShowSidebarButton(ctx);
+    const sidebarTitle = resolveSidebarTitle(ctx);
     // 注册 HTTP API
     const webServer = ctx.get?.('webServer');
     if (webServer) {
@@ -363,6 +403,7 @@ export async function apply(ctx) {
         console.log(`[plugin-repo-manager] repoDir: ${repoDir}`);
         console.log(`[plugin-repo-manager] skillsDir: ${skillsDir}`);
         console.log(`[plugin-repo-manager] pollInterval: ${pollInterval}ms`);
+        console.log(`[plugin-repo-manager] showSidebarButton: ${showSidebarButton}`);
     }
     else {
         console.warn(`[plugin-repo-manager] webServer not available, HTTP API not registered`);
@@ -372,6 +413,8 @@ export async function apply(ctx) {
         repoDir,
         skillsDir,
         pollInterval,
+        showSidebarButton,
+        sidebarTitle,
     });
 }
 /**

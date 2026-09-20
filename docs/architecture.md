@@ -87,11 +87,11 @@ make install NAME=lucky-api     # 或 make install-all
                     ↓ 产物提交进 git
 目标机: git pull
    └── bash scripts/install-to-profile.sh
-          ├── 复制 dist/ + client/ + cordis.patch.yml → profile/node_modules/@deepseek-ai/<name>/
+          ├── 复制 dist/ + client/ + cordis.patch.yml → profile/node_modules/<name>/
           ├── python3 更新 profile package.json（dependencies + dsh.profile.bundles）
           └── 备份原 package.json
                     ↓
-             重启 DSH → 面板出现在「设置 → 插件」
+             重启 DSH → 面板出现在主界面侧边栏 + 「设置 → 插件」
 ```
 
 ### 3.3 两条硬性约束

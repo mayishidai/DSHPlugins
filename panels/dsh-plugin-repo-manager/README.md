@@ -1,9 +1,10 @@
 # dsh-plugin-repo-manager
 
-DSH 插件：从设置面板管理自定义插件仓库。
+DSH 插件：从**主界面侧边栏**或设置面板管理自定义插件仓库。
 
 ## 功能
 
+- **主界面侧边栏图标按钮**：一键打开插件仓库面板（不必再翻设置）
 - 查看插件仓库中的所有插件
 - 显示已安装/未安装状态
 - 一键安装 / 一键卸载已安装插件（带确认对话框）
@@ -11,6 +12,41 @@ DSH 插件：从设置面板管理自定义插件仓库。
 - **一键更新**：单个更新或「⬆ 全部更新」批量串行更新
 - **更新留档**：更新前自动整目录备份为 `<插件名>.bak-<ISO时间戳>`，并在 `version.json` 记录 `previousVersion` / `updatedAt` / `backupDir`
 - 支持多语言（中文/英文）
+
+## 两个入口
+
+插件同时注册两个位置，两处渲染同一个面板：
+
+| 入口 | 槽位 | 说明 |
+|------|------|------|
+| **主界面侧边栏** | `sidebar` | 左侧竖条上的箱子图标按钮，点击打开面板。可用 `showSidebarButton: false` 关闭。 |
+| 设置面板 tab | `settings.plugins.tab` | 设置 → 插件 → 「我的插件仓库」 |
+
+> **侧边栏按钮是自绘的内联 SVG**，不依赖宿主的图标集。
+> 原因：把图标名（如 `icon: 'package'`）交给宿主去渲染，等于把「宿主认不认这个名字」
+> 变成运行时未知数——名字写错**不会报错**，只会静默显示空白，是最难发现的一类失效。
+> SVG 用 `currentColor` 描边，因此会自动跟随侧边栏的深浅色主题。
+
+### 侧边栏按钮配置
+
+```yaml
+- insert:
+    - id: plugin-repo
+      name: 'dsh-plugin-repo-manager'
+      config:
+        showSidebarButton: true    # false 则完全不注册该槽位
+        sidebarTitle: '插件仓库'    # hover 提示 / 无障碍标签；留空用语言字典默认值
+```
+
+`showSidebarButton` 也可用环境变量控制：`DSH_PLUGIN_SHOW_SIDEBAR=false`。
+
+> 布尔解析刻意宽容：`false` / `"false"` / `"0"` / `"no"` / `"off"` 都识别为关闭。
+> **不用 `Boolean(raw)`** —— 字符串 `"false"` 在 JS 里是**真值**，那样写会导致
+> 「配置里关掉了、实际却还显示」这种最难排查的失效。无法识别的值一律回退到默认
+> （显示），避免配置拼错把按钮静默弄丢。
+
+> 关闭时是**整个不注册槽位**，而不是「注册后渲染 `null`」。渲染 `null` 仍会占位，
+> 仍可能被宿主画出分隔线或引起布局抖动。
 
 ## 版本与更新机制
 
@@ -105,8 +141,9 @@ npm run typecheck    # 0 error
 
 1. 重启 DSH
 2. 打开 `http://127.0.0.1:2298/`
-3. 进入 **设置** → **插件**
-4. 点击 **「我的插件仓库」** tab
+3. 两种进法任选：
+   - **主界面左侧竖条** → 点 📦 箱子图标
+   - **设置** → **插件** → 「我的插件仓库」tab
 
 ## 配置
 
@@ -120,18 +157,29 @@ npm run typecheck    # 0 error
       name: 'dsh-plugin-repo-manager'
       config:
         repoDir: '/path/to/your/plugins'
+        showSidebarButton: true
 ```
+
+| 配置项 | 环境变量 | 默认值 | 说明 |
+|---|---|---|---|
+| `repoDir` | `DSH_PLUGIN_REPO_DIR` | `/vol1/1000/AI/DSHPlugin/skills` | 仓库目录（按类型分层的根，通常是 `DSHPlugins/skills`） |
+| `skillsDir` | `DSH_PLUGIN_SKILLS_DIR` | `$DSH_HOME/skills` | 技能安装目标目录 |
+| `pollInterval` | `DSH_PLUGIN_POLL_INTERVAL` | `3000` | 自动刷新间隔（毫秒） |
+| `showSidebarButton` | `DSH_PLUGIN_SHOW_SIDEBAR` | `true` | 是否显示主界面侧边栏按钮 |
+| `sidebarTitle` | `DSH_PLUGIN_SIDEBAR_TITLE` | 语言字典默认值 | 侧边栏按钮提示文案 |
+
+优先级：`cordis.patch.yml` 的 `config` > 环境变量 > 默认值。
 
 ## 架构
 
 ```
 dsh-plugin-repo-manager/
 ├── src/                    # TypeScript 源码（安装时不复制到目标机）
-│   ├── index.ts            # Host 入口（扫描/安装/卸载/更新/版本比较）
+│   ├── index.ts            # Host 入口（扫描/安装/卸载/更新/版本比较/配置解析）
 │   ├── types/
 │   │   └── host.d.ts       # DSH 宿主包类型声明桩（仅类型检查用）
 │   └── client/
-│       ├── index.tsx       # Client 注册（含 JSX，故为 .tsx）
+│       ├── index.tsx       # Client 注册（侧边栏按钮 + 设置 tab，含 JSX 故为 .tsx）
 │       ├── locales.ts      # 国际化字典
 │       └── PluginRepoPanel.tsx  # React 面板组件
 ├── dist/                   # ★ 服务端编译产物（入库，安装时使用）
@@ -139,17 +187,18 @@ dsh-plugin-repo-manager/
 │   └── index.d.ts
 ├── client/
 │   └── client.js           # ★ 客户端 bundle（入库，由 generate-client.mjs 生成）
-├── cordis.patch.yml        # Cordis 挂载配置
+├── cordis.patch.yml        # Cordis 挂载配置（含侧边栏开关）
 ├── manifest.json           # 插件元数据（版本号来源之一）
 ├── package.json            # main → dist/index.js
 ├── tsconfig.json           # 类型检查配置（noEmit）
 ├── tsconfig.build.json     # 编译配置（输出到 dist/）
 ├── generate-client.mjs     # 客户端 bundle 生成脚本
 └── scripts/
-    ├── install.sh          # 仅复制文件（完整安装用根目录脚本）
-    ├── test-isnewer.mjs    # 版本比较单元测试
-    ├── test-install-update.mjs  # 安装/更新流程端到端测试
-    └── test-paths.mjs      # 路径解析测试
+    ├── install.sh          # 转发桩（唯一实现在仓库根 scripts/）
+    ├── test-isnewer.mjs    # 版本比较单元测试（23 例）
+    ├── test-install-update.mjs  # 安装/更新流程端到端测试（24 例）
+    ├── test-paths.mjs      # 路径解析测试（14 例）
+    └── test-sidebar.mjs    # 侧边栏配置与注册测试（35 例）
 ```
 
 ## 与官方实现的区别
@@ -188,7 +237,7 @@ npm run typecheck
 # 编译（服务端 → dist/，客户端 → client/client.js）
 npm run build
 
-# 测试（版本比较 23 例 + 安装更新 24 例 + 路径 14 例）
+# 测试（版本比较 23 例 + 安装更新 24 例 + 路径 14 例 + 侧边栏 35 例）
 npm test
 ```
 

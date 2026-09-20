@@ -33,7 +33,7 @@ panels/<name>/
 
 | 面板 | 说明 |
 |---|---|
-| [dsh-plugin-repo-manager](dsh-plugin-repo-manager/) | DSH 设置面板里的「我的插件仓库」：列技能、装/卸、批量操作、轮询刷新 |
+| [dsh-plugin-repo-manager](dsh-plugin-repo-manager/) | 主界面侧边栏图标按钮 + 设置面板 tab：列技能、装/卸、版本检测与一键更新 |
 
 ## 注意
 

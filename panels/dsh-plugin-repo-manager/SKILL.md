@@ -1,7 +1,7 @@
 ---
 name: dsh-plugin-repo-manager
-description: "DSH 设置面板插件：浏览/安装/卸载/更新自建插件仓库（DSHPlugins）中的插件，支持版本检测与一键更新。"
-whenToUse: "当需要在 DSH 设置面板里管理自建插件仓库、或排查插件安装/更新问题时。"
+description: "DSH 面板插件：从主界面侧边栏图标或设置面板浏览/安装/卸载/更新自建插件仓库（DSHPlugins）中的插件，支持版本检测与一键更新。"
+whenToUse: "当需要在 DSH 主界面侧边栏或设置面板里管理自建插件仓库、或排查插件安装/更新问题时。"
 invocation:
   modelInvocable: false
   userInvocable: true
@@ -20,15 +20,26 @@ invocation:
 | 客户端入口 | `client/client.js`（自包含 bundle，已入库） |
 | 挂载 | `cordis.patch.yml` |
 
-它由 DSH 运行时加载，**不通过技能加载器调用**（`modelInvocable: false`）。人的入口是设置面板 UI。
+它由 DSH 运行时加载，**不通过技能加载器调用**（`modelInvocable: false`）。人的入口是主界面侧边栏图标或设置面板 UI。
 
 **装了就能用**：产物已编译并提交进 git，目标机不需要 npm 或编译工具链。
 
 ## 用法
 
+**两个入口，两处渲染同一个面板：**
+
 1. 重启 DSH
 2. 打开 `http://127.0.0.1:2298/`
-3. 进入 **设置** → **插件** → 点击 **「我的插件仓库」** tab
+3. 任选其一：
+   - **主界面左侧竖条** → 点 📦 箱子图标（**1 次点击**，最直接）
+   - 设置 → 插件 → 「我的插件仓库」tab
+
+侧边栏按钮由 `showSidebarButton` 控制（默认开）：
+`cordis.patch.yml` 里设 `false`，或环境变量 `DSH_PLUGIN_SHOW_SIDEBAR=false`。
+设为 `false` 时**完全不注册该槽位**，不会留空占位。
+
+按钮图标是**自绘内联 SVG**（`currentColor` 描边，自动跟随主题），不依赖宿主图标集——
+宿主认不认某个图标名是运行时未知数，写错不报错、只静默空白。
 
 ## 安装 / 卸载（不污染 DSH 源码）
 
@@ -81,7 +92,17 @@ bash scripts/uninstall-from-profile.sh
 
 ## 配置
 
-默认仓库目录 `/vol1/1000/AI/DSHPlugin/skills`。修改 `cordis.patch.yml`：
+| 配置项 | 环境变量 | 默认值 | 说明 |
+|---|---|---|---|
+| `repoDir` | `DSH_PLUGIN_REPO_DIR` | `/vol1/1000/AI/DSHPlugin/skills` | 仓库目录（按类型分层的根） |
+| `skillsDir` | `DSH_PLUGIN_SKILLS_DIR` | `$DSH_HOME/skills` | 技能安装目标目录 |
+| `pollInterval` | `DSH_PLUGIN_POLL_INTERVAL` | `3000` | 自动刷新间隔（毫秒） |
+| `showSidebarButton` | `DSH_PLUGIN_SHOW_SIDEBAR` | `true` | 是否显示主界面侧边栏按钮 |
+| `sidebarTitle` | `DSH_PLUGIN_SIDEBAR_TITLE` | 语言字典默认值 | 侧边栏按钮提示文案 |
+
+优先级：`cordis.patch.yml` 的 `config` > 环境变量 > 默认值。
+
+修改 `cordis.patch.yml`：
 
 ```yaml
 - insert:
@@ -91,11 +112,16 @@ bash scripts/uninstall-from-profile.sh
         repoDir: '/path/to/your/skills'
         skillsDir: '~/.dsh/skills'
         pollInterval: 3000
+        showSidebarButton: true
+        sidebarTitle: '插件仓库'
 ```
 
 > `repoDir` **必须指向按类型分层的仓库根**（含插件子目录的那一层，通常是 `DSHPlugins/skills`），不是仓库根目录本身。
 >
 > `skillsDir` / `repoDir` 支持 `~`，会被自动展开为家目录（不会写成字面量 `~` 目录）。
+>
+> `showSidebarButton` 的布尔解析宽容：`false` / `"0"` / `"no"` / `"off"` 都算关闭；
+> **不认识的写法一律回退到默认（显示）**，避免配置拼错把按钮静默弄丢。
 
 ## 开发速查
 
@@ -103,7 +129,7 @@ bash scripts/uninstall-from-profile.sh
 npm install          # 首次
 npm run typecheck    # 期望 0 error
 npm run build        # 服务端 → dist/，客户端 → client/client.js
-npm test             # 23 + 24 + 14 例
+npm test             # 23 + 24 + 14 + 35 例
 ```
 
 > 改过 `src/client/*` 或 `generate-client.mjs` 后必须重跑 `npm run build`；

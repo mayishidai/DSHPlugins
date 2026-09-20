@@ -10,3 +10,8 @@
         repoDir: '/vol1/1000/AI/DSHPlugin/skills'
         skillsDir: '~/.dsh/skills'
         pollInterval: 3000
+        # 主界面左侧竖条上的图标按钮；点它直接打开「我的插件仓库」面板。
+        # 设为 false 则完全不注册该槽位（不是渲染成空占位）。
+        showSidebarButton: true
+        # 按钮的 hover 提示与无障碍标签；留空则用当前语言字典里的默认文案。
+        sidebarTitle: '插件仓库'
