@@ -57,7 +57,8 @@ bash scripts/update-and-install.sh
 | `bash scripts/update-and-install.sh` | 拉取 + 重装面板（默认） |
 | `bash scripts/update-and-install.sh --skills` | 顺便重装 `skills/` 下全部技能 |
 | `bash scripts/update-and-install.sh --no-pull` | 只重装，不拉取（本地已改好时用） |
-| `make update-panel` | 等价的 make 目标 |
+| `bash scripts/update-and-install.sh --list-profiles` | 只列出 profile 候选（排查「装到哪去了」） |
+| `make update-panel` / `make list-profiles` | 等价的 make 目标 |
 
 > 工作区**有未提交改动时会拒绝拉取并以 3 退出**（不静默 stash/覆盖），
 > 避免把你的本地修改冲掉。此时请先 commit/stash，或加 `--no-pull`。
@@ -67,10 +68,10 @@ bash scripts/update-and-install.sh
 
 ### 1. 装到 DSH profile
 
-**只用这一个脚本**（在 NAS 上、仓库根执行）：
+**只用这一个脚本**（在目标机、仓库根执行）：
 
 ```bash
-cd /vol1/1000/AI/DSHPlugin
+cd <仓库目录>
 bash scripts/install-to-profile.sh
 ```
 
@@ -81,7 +82,18 @@ bash scripts/install-to-profile.sh
 > ⚠️ 不要用 `panels/dsh-plugin-repo-manager/scripts/install.sh` ——
 > 它已改为**转发桩**，本身不实现安装逻辑（原因见下「为什么只有一个安装脚本」）。
 
-指定别的 profile：`PROFILE_DIR=/path/to/profile bash scripts/install-to-profile.sh`
+**profile 目录自动查找**，一般不传参数即可。找错了或找不到时：
+
+```bash
+bash scripts/lib/resolve-profile.sh --list                       # 只读：看候选与检查结果
+PROFILE_DIR=<数据根>/profiles/web bash scripts/install-to-profile.sh   # 显式指定（最准）
+DSH_HOME=<数据根>                 bash scripts/install-to-profile.sh   # 只给数据根
+DSH_PROFILE=web DSH_HOME=<数据根> bash scripts/install-to-profile.sh   # 多个 profile 时指定名字
+```
+
+> ⚠️ 2026-09-21 之前这里写死的默认值是 `/vol2/@appdata/.../profiles/web`，
+> **换一台机器就报 `ERROR: DSH profile 不存在`**（用户原话：「我不止部署一个机器的 DSH」）。
+> 现在一律运行时探测，且多个命中**不猜**、会列出候选让你指定。
 
 ### 2. 重启 DSH
 

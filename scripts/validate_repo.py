@@ -138,6 +138,20 @@ def _strip_js_comments(src: str) -> str:
     return src
 
 
+def _strip_sh_comments(src: str) -> str:
+    """剔除 shell 脚本里的**整行注释**，便于「只看真实代码」地做特征检查。
+
+    与 `_strip_js_comments` 同一个理由：本仓库习惯在注释里引用**旧的错误写法**
+    当反面教材 —— 例如 `scripts/install-to-profile.sh` 与
+    `scripts/lib/resolve-profile.sh` 都写着一行
+        #   PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/.../profiles/web}"
+    来说明「曾经错在哪里」。不剔除，检查会把自己的说明文字判成违规。
+    """
+    return "\n".join(
+        line for line in src.splitlines() if not line.lstrip().startswith("#")
+    )
+
+
 def check_panel_esm_safety(repo: Path) -> None:
     """面板插件：ESM 包里**不得**出现 `require(` 调用。
 
@@ -236,6 +250,138 @@ def check_panel_skills_dir(repo: Path) -> None:
         print("         症状：点安装/卸载「没生效」—— 面板有反应、DSH 侧毫无变化，且不报错。")
     else:
         ok(f"面板插件的 skillsDir 配置正常（{scanned} 个 cordis.patch.yml 未写死 ~ 路径）")
+
+
+# ---------------------------------------------------------------------------
+# 2.10 宿主路径必须运行时探测，不得写死成「唯一默认」
+# ---------------------------------------------------------------------------
+
+# 判据：`${VAR:-/绝对路径}` —— 即「只有一个默认值，而那个默认值是某台机器的事实」。
+# 变量名里必须含 profile（忽略大小写），避免误伤 DSH_RUNTIME 这类旁支路径。
+HARDCODED_HOST_PATH_RE = re.compile(
+    r"\$\{[A-Za-z_]*[Pp][Rr][Oo][Ff][Ii][Ll][Ee][A-Za-z_]*:-/"
+)
+
+PROFILE_LIB_REL = "scripts/lib/resolve-profile.sh"
+# 允许 source 解析库的写法（两种 shell 写法都认）
+_SOURCE_RE = re.compile(
+    r"^\s*(?:\.|source)\s+[^\n]*resolve-profile\.sh", re.MULTILINE
+)
+# 「profile 定位」的唯一实现 = 唯一一条函数定义。
+# ⚠️ 为什么不用「有没有 PROFILE_DIR= 赋值」当判据：解析库的帮助文本里必然
+#    印着 `PROFILE_DIR=<路径> ...` 的用法示例（那是它的职责），按赋值形态匹配
+#    会把库自己判成「第二份实现」（实测已踩）。**要拦的是「实现第二份」，
+#    不是「提到这个名字」。**
+_RESOLVER_DEF_RE = re.compile(
+    r"^[ \t]*(?:function[ \t]+)?resolve_dsh_profile_dir[ \t]*\([ \t]*\)",
+    re.MULTILINE,
+)
+
+
+def check_host_path_not_hardcoded(repo: Path) -> None:
+    """宿主路径（profile）**不得**写死成唯一默认值 —— 必须运行时探测。
+
+    这是 2026-09-21 事故的直接防线，而那已经是**同一类问题的第二次出现**：
+
+      第 1 次 —— 面板 `cordis.patch.yml` 写死 `skillsDir: '~/.dsh/skills'`
+                （容器里展开成 `/root/.dsh/skills`，DSH 扫的是 `$DSH_HOME/skills`）。
+      第 2 次 —— `scripts/install-to-profile.sh` 写死
+                PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}"
+                于是**只有那一台机器**能装。用户换一台部署就跑出：
+                    ERROR: DSH profile 不存在: /vol2/@appdata/...
+                用户原话：「**我不止部署一个机器的 DSH**」。
+
+    两次共同点：**把「某台机器观察到的事实」当成了「普适默认值」**。
+    失效形态也一致：不报错、或者报错信息只说「不存在」，不说「我找过哪些地方」。
+
+    ## 判据
+    (a) 任何 `.sh` 都不得出现 `${<含 profile 的变量>:-/绝对路径}`。
+        这正是「唯一默认值写死」的形态；注释里引用它作反例不算（先剔整行注释）。
+    (b) 唯一实现 `scripts/lib/resolve-profile.sh` 必须存在，且
+        `resolve_dsh_profile_dir` **只能在这个文件里定义一次**。
+    (c) 安装 / 卸载两个脚本必须都 **source** 它（不能有一边偷偷自己算）。
+
+    ⚠️ 为什么必须有这条：`check_install_targets`(2.5) 只查「落点目录名 == 包名」，
+    `check_install_uninstall_parity`(2.7) 只查「两个脚本彼此一致」——
+    **两者都查不出「这个默认值本身是错的/只对一台机器成立」**。
+    同「只检查唯一实现内部自洽照不出第二份实现」，这里也是必须另做结构性扫描的一类。
+    """
+    offenders: list[str] = []
+
+    for sh in sorted(repo.rglob("*.sh")):
+        rel = sh.relative_to(repo).as_posix()
+        if rel.startswith(".git/") or rel.startswith(".workbuddy/"):
+            continue
+        try:
+            raw = sh.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        code = _strip_sh_comments(raw)
+        for m in HARDCODED_HOST_PATH_RE.finditer(code):
+            line = code[:m.start()].count("\n") + 1
+            snippet = code.splitlines()[line - 1].strip()
+            offenders.append(f"{rel}:{line}  {snippet[:90]}")
+
+    if offenders:
+        bad(f"{len(offenders)} 处把宿主路径写死成唯一默认值"
+            f"（换一台机器就装不上）")
+        for o in offenders:
+            print(f"         {o}")
+        print("         改法：删掉该默认值，改为 source scripts/lib/resolve-profile.sh")
+        print("               并调用 resolve_dsh_profile_dir —— 运行时探测 + 唯一命中才采用。")
+        print("         症状：换个部署就报「profile 不存在」，而正确目录其实就在别处。")
+    else:
+        ok("没有任何 .sh 把 profile 路径写死成唯一默认值（均为运行时探测）")
+
+    lib = repo / PROFILE_LIB_REL
+    if not lib.is_file():
+        bad(f"缺少 profile 解析库 {PROFILE_LIB_REL}（宿主路径探测的唯一实现）")
+        return
+    ok(f"{PROFILE_LIB_REL} 存在（宿主路径探测的唯一实现）")
+
+    # (b2) 函数定义唯一性 —— 「实现只放一处」的正面判据
+    definers: list[str] = []
+    for sh in sorted(repo.rglob("*.sh")):
+        rel = sh.relative_to(repo).as_posix()
+        if rel.startswith(".git/") or rel.startswith(".workbuddy/"):
+            continue
+        try:
+            raw = sh.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if _RESOLVER_DEF_RE.search(_strip_sh_comments(raw)):
+            definers.append(rel)
+
+    if definers == [PROFILE_LIB_REL]:
+        ok("resolve_dsh_profile_dir 只在解析库中定义（无第二份实现）")
+    elif not definers:
+        bad("没有任何脚本定义 resolve_dsh_profile_dir（解析库可能被改名/清空）")
+    else:
+        bad(f"resolve_dsh_profile_dir 在 {len(definers)} 个文件里各有定义"
+            f"（同一套逻辑写两份必然漂移）")
+        for d in definers:
+            print(f"         {d}")
+        print(f"         应只保留 {PROFILE_LIB_REL}，其余改为 source 后调用。")
+
+    # ⚠️ 必须**在函数里**取 CANONICAL_INSTALLER：它定义在本文件更下方，
+    #    写成模块级常量会在 import 期就 NameError。
+    lib_sourcers = (CANONICAL_INSTALLER, "scripts/uninstall-from-profile.sh")
+
+    missing: list[str] = []
+    for rel in lib_sourcers:
+        f = repo / rel
+        if not f.is_file():
+            missing.append(f"{rel}  (文件不存在)")
+            continue
+        if not _SOURCE_RE.search(f.read_text(encoding="utf-8", errors="replace")):
+            missing.append(f"{rel}  (未 source {PROFILE_LIB_REL})")
+    if missing:
+        bad(f"{len(missing)} 个脚本没有使用共享的 profile 解析库")
+        for m in missing:
+            print(f"         {m}")
+        print("         两个脚本各算一遍落点必然漂移 —— 装到 A、卸载删 B。")
+    else:
+        ok(f"install / uninstall 均 source {PROFILE_LIB_REL}（落点判据只有一处实现）")
 
 
 def check_panel(plugin: Path, name: str) -> None:
@@ -498,6 +644,11 @@ ALLOWED_TARGET_OWNERS = {
 }
 
 # 判据：出现这个变量赋值即视为「自己实现了一遍 profile 落点」。
+# ⚠️ 只查 `PROFILE_NODE_MODULES`，**特意不查 `PROFILE_DIR`**：
+#    解析库的帮助文本里会印 `PROFILE_DIR=<路径> ...` 这样的示例行（告诉用户怎么用），
+#    按「赋值形态」匹配会把它误判成第二份实现 —— 实测踩过。
+#    「profile 定位只有一处实现」改由 2.10 用**函数定义唯一性**判据守住，
+#    那才是真正该拦的东西（拦「实现第二份」，而不是拦「提到这个名字」）。
 TARGET_VAR_RE = re.compile(r"^\s*PROFILE_NODE_MODULES\s*=", re.MULTILINE)
 
 
@@ -506,6 +657,8 @@ def check_install_impl_uniqueness(repo: Path) -> None:
 
     判据：除 `ALLOWED_TARGET_OWNERS` 里的文件外，任何 `.sh` 都不得给
     `PROFILE_NODE_MODULES` 赋值。
+    （「到哪个 profile」那一半由 2.10 用**函数定义唯一性**守住 —— 见那里为何
+    不能按「出现 PROFILE_DIR=」来判。）
 
     为什么需要这条：
       这里曾有两份实现 —— 仓库根的 `scripts/install-to-profile.sh` 和
@@ -547,8 +700,14 @@ def check_install_impl_uniqueness(repo: Path) -> None:
 
 
 # 从某个脚本里抓出落点三元组（用于比对安装/卸载是否一致）
+#
+# ⚠️ `PROFILE_DIR` 的取值形态在 2026-09-21 变了：以前是写死的默认值
+#    `"${PROFILE_DIR:-/vol2/.../profiles/web}"`，现在是
+#    `"$(resolve_dsh_profile_dir "$PKG_NAME")" || exit $?`。
+#    判据随之放宽为「整行」，因为**真正的一致性已由「两边 source 同一个解析库」
+#    保证**（见 2.10），这里只需拦住「有一边偷偷换成了别的调用/别的路径」。
 _LOC_RE = {
-    "PROFILE_DIR": re.compile(r'^PROFILE_DIR="\$\{PROFILE_DIR:-([^}]*)\}"', re.MULTILINE),
+    "PROFILE_DIR": re.compile(r'^PROFILE_DIR=(.+)$', re.MULTILINE),
     "NODE_MODULES": re.compile(r'^PROFILE_NODE_MODULES=(.+)$', re.MULTILINE),
     "PKG_NAME": re.compile(r'^PKG_NAME=(.+)$', re.MULTILINE),
     "TARGET_DIR": re.compile(r'^TARGET_DIR=(.+)$', re.MULTILINE),
@@ -863,6 +1022,9 @@ def main() -> int:
 
         print("\n2.9 面板 skillsDir 落点（不得写死 ~ 路径）")
         check_panel_skills_dir(repo)
+
+        print("\n2.10 宿主路径必须运行时探测（不得写死成唯一默认值）")
+        check_host_path_not_hardcoded(repo)
 
         print("\n3. 脚本可执行位")
         check_exec_bits(repo)

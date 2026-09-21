@@ -22,16 +22,20 @@ set -euo pipefail
 #   bash scripts/update-and-install.sh                 # 拉取 + 重装面板
 #   bash scripts/update-and-install.sh --skills        # 另外重装 skills/ 下全部技能
 #   bash scripts/update-and-install.sh --no-pull       # 只重装，不拉取
+#   bash scripts/update-and-install.sh --list-profiles # 只列出 profile 候选（排查用）
 #   PROFILE_DIR=/path/to/profile bash scripts/update-and-install.sh
 #
 # 环境变量:
 #   REPO_REMOTE   拉取用的远端名（默认 origin）
 #   REPO_BRANCH   拉取的分支（默认：当前所在分支）
-#   DSH_HOME      技能安装目标（默认 $HOME/.dsh，与 Makefile 一致）
+#   DSH_HOME      DSH 数据根（技能安装目标 + profile 定位的权威来源）
+#   PROFILE_DIR   直接指定 profile（最高优先，见 scripts/lib/resolve-profile.sh）
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 INSTALLER="$SCRIPT_DIR/install-to-profile.sh"
+# 只做**转发**，不复制实现（同下文的落点铁律）。
+PROFILE_RESOLVER="$SCRIPT_DIR/lib/resolve-profile.sh"
 
 REPO_REMOTE="${REPO_REMOTE:-origin}"
 
@@ -42,12 +46,16 @@ while [ $# -gt 0 ]; do
         --no-pull) DO_PULL=0 ;;
         --skills)  DO_SKILLS=1 ;;
         --pull)    DO_PULL=1 ;;
+        --list-profiles)
+            # 只读诊断：把 profile 候选与各自检查结果全部摊开。转发出唯一实现。
+            exec bash "$PROFILE_RESOLVER" --list
+            ;;
         -h|--help)
             sed -n '/^# 用法:/,/^#$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *)
-            echo "ERROR: 未知参数 $1（可用: --no-pull --skills --help）" >&2
+            echo "ERROR: 未知参数 $1（可用: --no-pull --skills --pull --list-profiles --help）" >&2
             exit 2
             ;;
     esac

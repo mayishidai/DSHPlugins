@@ -2,6 +2,8 @@
 
 > 目的：让「新增/修改/安装/卸载/发布一个插件」成为可复制的流程，快速迭代。
 > 适用：本仓库 `/vol1/1000/AI/DSHPlugin`，目标 DSH 数据根 `/vol2/@appdata/deepseek.harness/dsh-data`。
+> ⚠️ 下表只是**这一台 NAS** 的实测值，**不是任何脚本的默认值** ——
+> 本仓库不止一台 DSH，所有宿主路径都由脚本运行时探测（见第 0.1 节）。
 
 ---
 
@@ -12,6 +14,7 @@
 | 仓库根 | `/vol1/1000/AI/DSHPlugin` |
 | DSH 数据根 `$DSH_HOME` | `/vol2/@appdata/deepseek.harness/dsh-data` |
 | 技能安装目录 `$SKILLS_DIR` | `$DSH_HOME/skills/`（DSH 自动扫描，装进去即被发现） |
+| 面板安装目录 | `$DSH_HOME/profiles/web/node_modules/dsh-plugin-repo-manager/`（**自动查找**） |
 | WorkBuddy 用户级技能目录 | `~/.workbuddy/skills/`（由 `make sync-skill` 生成，**不要手改**） |
 | 依赖 | bash + python3；Windows 开发机上没有 `make`，可直接调用 `scripts/` 下的命令 |
 
@@ -30,11 +33,52 @@
 | 编译面板插件 | `make build` |
 | 装 / 卸面板到 DSH profile | `make install-panel` / `make uninstall-panel` |
 | 拉取最新并重装面板 | `make update-panel`（= `bash scripts/update-and-install.sh`；加 `--skills` 连技能一起装） |
+| **看 profile 解析到哪** | `bash scripts/update-and-install.sh --list-profiles`（只读） |
 | 面板测试 / 类型检查 | `make test` / `make typecheck` |
 
 > ⚠️ **不存在的脚本**：`install-plugin.sh`、`uninstall-plugin.sh`、`sync-to-dsh.sh`、
 > `list-plugins.sh`、`build-manifest.sh`、`scripts/lib.sh`、`templates/` 都不在本仓库里。
 > 旧文档里若还提到它们，属于历史遗留的错误引用，一律以本表为准。
+> （注意 `scripts/lib/` **是**存在的，但里面的文件是 `resolve-profile.sh`。）
+
+---
+
+## 0.1 多机部署：宿主路径一律运行时探测
+
+**这条是硬约束，不是建议。** 两次事故同源：
+
+| 时间 | 写死的东西 | 后果 |
+|---|---|---|
+| 2026-09-21 | 面板 `cordis.patch.yml` 的 `skillsDir: '~/.dsh/skills'` | 容器里展开成 `/root/.dsh/skills`，DSH 扫的是 `$DSH_HOME/skills` → 点安装/卸载「没生效」，**不报错** |
+| 2026-09-21 | `scripts/install-to-profile.sh` 的 `PROFILE_DIR="${PROFILE_DIR:-/vol2/.../profiles/web}"` | **只有那一台机器能装**，换一台报 `ERROR: DSH profile 不存在` |
+
+共同点：**把「某台机器观察到的事实」当成了「普适默认值」**。
+
+**唯一实现**：`scripts/lib/resolve-profile.sh`（`install-to-profile.sh` 与
+`uninstall-from-profile.sh` 各 source 同一份 —— 一个写一个删，必须算出同一路径）。
+探测优先级：
+
+```
+env PROFILE_DIR              显式指定 → 权威，无效就报错，绝不回退到别处
+env DSH_PROFILE              名字或绝对路径，同样算显式
+ <DSH_HOME>/profiles/web     DSH Web UI 的标准 profile 名
+ 已装过本插件的位置           升级路径：装在哪就更哪，不换地方
+ <HOME>/.dsh/profiles/web
+ 内置「已知数据根」清单        只是搜索起点，全部要过存在性检查
+ 受限搜索 */profiles/*/       最后一招，可用 DSH_NO_PROFILE_SEARCH=1 关掉
+```
+
+规则：**唯一命中才采用**；多个命中列出候选并要求显式指定（退出码 3）；
+一个都没有则打印**全部检查过的候选** + 手动指定方法（退出码 1）。
+`DSH_HOME` 一旦给出可用 profile，就**只在它的子树里挑**。
+
+配套守卫（都有双向注入回归）：
+`validate_repo.py` 2.10（不得写死 + 函数定义唯一 + 两个脚本都 source）、
+`scripts/tests/test-profile-resolve.sh`（25 例，调**真实 lib**）。
+
+> 判据教训：**要拦的是「实现第二份」，不是「提到这个名字」**。
+> 第一版把 `PROFILE_DIR=` 赋值形态当判据，结果解析库自己的帮助文本
+> （`PROFILE_DIR=<路径> ...`，那是它的职责）被误判成第二份实现。
 
 ---
 

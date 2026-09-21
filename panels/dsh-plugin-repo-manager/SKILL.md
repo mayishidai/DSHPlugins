@@ -79,6 +79,23 @@ bash scripts/install-to-profile.sh
 bash scripts/uninstall-from-profile.sh
 ```
 
+**profile 目录是自动查找的**（2026-09-21 起）：唯一实现在仓库根的
+`scripts/lib/resolve-profile.sh`，安装/卸载共用。曾经写死
+`/vol2/@appdata/.../profiles/web`，**只有那一台机器能装**，换一台就报
+`ERROR: DSH profile 不存在`（用户原话：「我不止部署一个机器的 DSH」）。
+
+```bash
+bash scripts/lib/resolve-profile.sh --list          # 只读：看候选与各自检查结果
+PROFILE_DIR=<数据根>/profiles/web bash scripts/install-to-profile.sh   # 显式指定（最准）
+DSH_HOME=<数据根>                 bash scripts/install-to-profile.sh   # 只给数据根
+DSH_PROFILE=web DSH_HOME=<数据根> bash scripts/install-to-profile.sh   # 多个 profile 时指定
+```
+
+优先级：`PROFILE_DIR` > `DSH_PROFILE` > `<DSH_HOME>/profiles/web` >
+**已装过本插件的位置**（升级不换地方）> `~/.dsh/profiles/web` > 常见数据根 > 受限搜索。
+**唯一命中才采用**；多个命中列出候选并要求显式指定（退出码 3）；
+全都没有则打印**全部检查过的候选** + 手动指定方法（退出码 1）。
+
 只写入 DSH 的 **profile 目录**（用户数据区），**不修改 DSH 运行时源码**。
 
 ## 排查：面板空白、只有一个「重试」按钮
@@ -210,7 +227,7 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 npm install          # 首次
 npm run typecheck    # 期望 0 error
 npm run build        # 服务端 → dist/，客户端 → client/client.js
-npm test             # 九套，共 224 例
+npm test             # 九套，共 233 例
 ```
 
 > 改过 `src/client/*` 或 `generate-client.mjs` 后必须重跑 `npm run build`；
@@ -218,4 +235,14 @@ npm test             # 九套，共 224 例
 >
 > **只改样式也算改 `src/client/*`** —— 两份实现的尺寸数值必须一致，
 > 由 `test-client-parity.mjs` 第 [9] 节守住。
+
+仓库级校验（本机无 `make` 时按序手动跑，失败必须为 0）：
+
+```bash
+python3 scripts/validate_repo.py                      # 218 通过 / 0 失败
+bash scripts/preflight.sh                             # 91 通过 / 0 失败
+python3 scripts/tests/test_cred_parity.py             # 11/11 判定一致
+node scripts/tests/test-panel-resolve.mjs             # 6 通过 / 0 失败
+bash scripts/tests/test-profile-resolve.sh            # 25 通过 / 0 失败（profile 自动查找）
+```
 

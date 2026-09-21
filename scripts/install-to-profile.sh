@@ -12,8 +12,13 @@ set -euo pipefail
 #   4. 卸载走同目录的 uninstall-from-profile.sh，可完整还原。
 #
 # 用法:
-#   bash scripts/install-to-profile.sh              # 安装
-#   PROFILE_DIR=/path/to/profile bash scripts/...   # 指定 profile
+#   bash scripts/install-to-profile.sh              # 安装（profile 自动查找）
+#   PROFILE_DIR=/path/to/profile bash scripts/...   # 显式指定 profile
+#   DSH_HOME=/path/to/dsh-data bash scripts/...     # 只给数据根，自己找 profiles/web
+#   DSH_PROFILE=web DSH_HOME=... bash scripts/...   # 数据根下有多个 profile 时指定名字
+#   bash scripts/lib/resolve-profile.sh --list      # 只列出全部候选与检查结果
+#
+# ⚠️ profile 目录**运行时探测**，见下方「落点」一节。
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -48,16 +53,35 @@ to_native() {
 #
 # 另外：dependencies 的 key 就是包名，npm 本就该把它装在 node_modules/<key>，
 # 预先放到 @deepseek-ai/ 与自己的依赖声明自相矛盾。所以落点必须是不带作用域的。
-PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}"
-PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules"
+#
+# ---------- 另一个落点：profile 目录本身（2026-09-21） ----------
+# profile 目录**绝不能写死**。曾写成
+#   PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}"
+# 于是只有那一台机器能装，换个部署立刻报「DSH profile 不存在」。
+# 用户原话：「我不止部署一个机器的 DSH」。
+#
+# 现在改为**运行时探测**，唯一实现是 scripts/lib/resolve-profile.sh（本脚本与
+# scripts/uninstall-from-profile.sh 共用同一份 —— 一个写、一个删，必须算出同一路径）。
+# 探测顺序（详见该库头部注释）：
+#   env PROFILE_DIR > env DSH_PROFILE > 已装过本插件的位置 > $DSH_HOME/profiles/web
+#   > $HOME/.dsh/profiles/web > 常见数据根 > 受限搜索
+# **唯一命中才采用**；多个命中就报错列出候选并让人显式指定，绝不猜。
+# 结构性守卫：validate_repo.py 的 2.7（安装/卸载逐字一致）与 2.10（不得写死宿主路径）。
+# shellcheck source=lib/resolve-profile.sh
+. "$SCRIPT_DIR/lib/resolve-profile.sh"
+
 PKG_NAME="dsh-plugin-repo-manager"
+
+echo "=== 安装 $PKG_NAME 到 DSH profile ==="
+echo "插件源: $PLUGIN_SRC"
+
+PROFILE_DIR="$(resolve_dsh_profile_dir "$PKG_NAME")" || exit $?
+PROFILE_NODE_MODULES="$PROFILE_DIR/node_modules"
 TARGET_DIR="$PROFILE_NODE_MODULES/$PKG_NAME"
 
 # 供 python 使用的原生路径
 PROFILE_PKG_NATIVE="$(to_native "$PROFILE_DIR/package.json")"
 
-echo "=== 安装 $PKG_NAME 到 DSH profile ==="
-echo "插件源: $PLUGIN_SRC"
 echo "目标:   $TARGET_DIR"
 echo ""
 
@@ -66,16 +90,9 @@ if [ ! -d "$PLUGIN_SRC" ]; then
     exit 1
 fi
 
-if [ ! -d "$PROFILE_DIR" ]; then
-    echo "ERROR: DSH profile 不存在: $PROFILE_DIR" >&2
-    echo "请确认 DSH 已安装，或用 PROFILE_DIR=... 指定正确路径。" >&2
-    exit 1
-fi
-
-if [ ! -f "$PROFILE_DIR/package.json" ]; then
-    echo "ERROR: 找不到 $PROFILE_DIR/package.json" >&2
-    exit 1
-fi
+# 注意：PROFILE_DIR 由 resolve_dsh_profile_dir 保证「存在且含 package.json」；
+# 解析不出来时脚本已在那一步退出（退出码 1/2/3，并打印全部候选与手动指定方法）。
+# 此处**刻意不再重复检查** —— 重复一份判据必然与 resolver 漂移（本仓库的铁律之一）。
 
 # 0. 编译产物必须存在——这是「编译好直接用」的前提
 if [ ! -f "$PLUGIN_SRC/dist/index.js" ]; then

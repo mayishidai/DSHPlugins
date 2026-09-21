@@ -109,8 +109,22 @@ bash scripts/update-and-install.sh --skills # 顺便重装 skills/ 下全部技�
 > 反过来只重装不拉取，装的还是旧的。
 > 该脚本内部用相对路径定位自身，且**只转发**到 `install-to-profile.sh`（不重写落点逻辑）。
 
+**多机部署：profile 目录是自动查找的，不需要改脚本。**
+曾经它写死成 `/vol2/@appdata/deepseek.harness/dsh-data/profiles/web`，
+于是只有那一台机器能装，换一台就报 `ERROR: DSH profile 不存在`。
+现在由 `scripts/lib/resolve-profile.sh` 运行时探测：
+
+```bash
+bash scripts/update-and-install.sh --list-profiles   # 先看它找到了哪些候选
+bash scripts/install-to-profile.sh                   # 通常直接就能用
+```
+
+按优先级找：`PROFILE_DIR` → `DSH_PROFILE` → `DSH_HOME/profiles/web` →
+已装过本插件的那个 profile（升级不换地方）→ `~/.dsh/profiles/web` → 常见数据根 → 受限搜索。
+**唯一命中才采用**；多个命中会列出来让你显式指定，不猜。
+
 **这个脚本只写入 DSH 的 profile 目录**（用户数据区
-`dsh-data/profiles/web`），做三件事：
+`<DSH 数据根>/profiles/<名字>`，NAS 上是 `dsh-data/profiles/web`），做三件事：
 
 1. 复制**编译产物**（`dist/` + `client/` + `cordis.patch.yml`）到 profile 的
    `node_modules/dsh-plugin-repo-manager/`（**必须与包名一致**，否则 DSH 解析不到该包，

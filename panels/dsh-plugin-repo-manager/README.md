@@ -224,10 +224,18 @@ node scripts/test-isnewer.mjs
 # 推荐：从仓库根目录安装（只写 DSH profile，不改 DSH 源码）
 bash ../../scripts/install-to-profile.sh
 
-# 或指定 profile 路径
-PROFILE_DIR=/vol2/@appdata/deepseek.harness/dsh-data/profiles/web \
-    bash ../../scripts/install-to-profile.sh
+# profile 目录**自动查找**，通常无需任何参数。
+# 想看它找到了哪些候选（只读）：bash ../../scripts/lib/resolve-profile.sh --list
+# 需要显式指定时才用：
+#   PROFILE_DIR=<数据根>/profiles/web bash ../../scripts/install-to-profile.sh
+#   DSH_HOME=<数据根>                bash ../../scripts/install-to-profile.sh
 ```
+
+> ⚠️ 2026-09-21 之前这里写死了 `/vol2/@appdata/.../profiles/web`，**只有那一台机器能装**。
+> 现在由 `scripts/lib/resolve-profile.sh` 运行时探测，优先级
+> `PROFILE_DIR` > `DSH_PROFILE` > `<DSH_HOME>/profiles/web` > 已装过本插件的位置
+> > `~/.dsh/profiles/web` > 常见数据根 > 受限搜索。
+> **唯一命中才采用**，多个命中会列出来让你显式指定。
 
 安装脚本做三件事：复制 `dist/` + `client/` + `cordis.patch.yml` 到 profile 的
 `node_modules/dsh-plugin-repo-manager/`、用 python3 安全更新
@@ -251,7 +259,7 @@ bash ../../scripts/uninstall-from-profile.sh
 ```bash
 npm install          # 首次
 npm run build        # 服务端 tsc + 客户端 bundle
-npm test             # 七套测试，共 166 例
+npm test             # 九套测试，共 233 例
 npm run typecheck    # 0 error
 ```
 
@@ -406,10 +414,14 @@ npm run typecheck
 # 编译（服务端 → dist/，客户端 → client/client.js）
 npm run build
 
-# 测试（23+24+14+35+18+25+27 = 166 例）
+# 测试（23+24+14+35+31+25+36+22+23 = 233 例 / 九套）
 npm test
 ```
 
-> **注意 1**：`generate-client.mjs` 内嵌了一份 client 源码副本。改完 `src/client/*` 后必须同步改 `generate-client.mjs`，再重跑生成脚本，否则改动会被覆盖回旧值。
+> **注意 1**：`generate-client.mjs` 内嵌了一份 client 源码副本。改完 `src/client/*` 后必须同步改 `generate-client.mjs`，再重跑生成脚本，否则改动会被覆盖回旧值（判据见 `test-client-parity.mjs`）。
 >
 > **注意 2**：`dist/` 与 `client/client.js` 是**要提交进 git 的编译产物**——目标机靠它们直接运行。改完源码务必 `npm run build` 并一起提交。
+>
+> **注意 3**：仓库级校验里还有一条 **`scripts/tests/test-profile-resolve.sh`（25 例）**，
+> 管的是「装到哪个 profile」——profile 目录必须运行时探测，不得写死（见上文「安装」）。
+> 它测的是仓库根的解析库，不属于本插件的 `npm test`，由 `make verify` 第 5 步跑。
