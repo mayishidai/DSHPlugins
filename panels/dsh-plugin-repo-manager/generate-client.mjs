@@ -87,6 +87,9 @@ const bundleCode = `window.__ModuleLoader__.load({
       var _s7 = React.useState(false), showSettings = _s7[0], setShowSettings = _s7[1];
       var _s8 = React.useState(new Date()), lastUpdate = _s8[0];
       var _s9 = React.useState(null), notice = _s9[0], setNotice = _s9[1];
+      // skillsDir 错位告警（后端 /list 带回；无问题时为 null）+ 用户是否已关掉提示
+      var _s10 = React.useState(null), skillsDirWarning = _s10[0], setSkillsDirWarning = _s10[1];
+      var _s11 = React.useState(false), warningDismissed = _s11[0], setWarningDismissed = _s11[1];
 
       function load() {
         setLoading(true); setError(null);
@@ -105,7 +108,8 @@ const bundleCode = `window.__ModuleLoader__.load({
             return r.json();
           })
           .then(function(d) {
-            if (d.ok && d.plugins) { setPlugins(d.plugins); }
+            // 每次刷新都更新 skillsDir 诊断：它是「装了却没生效」的唯一线索
+            if (d.ok && d.plugins) { setPlugins(d.plugins); setSkillsDirWarning(d.skillsDirWarning || null); }
             else setError((d.error && d.error.message) || '接口返回 OK=false');
           })
           .catch(function(e) {
@@ -231,6 +235,13 @@ const bundleCode = `window.__ModuleLoader__.load({
         notice && jsxRuntime.jsx('div', {style:{marginBottom:'8px',padding:'5px 10px',borderRadius:'5px',fontSize:'12px',background:'var(--dsw-alias-state-success-bg)',color:'var(--dsw-alias-state-success-primary)',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px'}},
           jsxRuntime.jsx('span', null, notice),
           jsxRuntime.jsx('button', {onClick:function(){setNotice(null);},style:{padding:'2px 8px',borderRadius:'4px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'12px',flexShrink:0}}, 'Close')
+        ),
+        // skillsDir 错位告警：这类失效**全程不报错** —— 面板显示「已安装」、
+        // 文件确实写进磁盘、接口全部 ok:true，但 DSH 扫描的是另一个目录，
+        // 所以技能装了也看不见。必须在这里直接说清楚，别让用户去猜。
+        skillsDirWarning && !warningDismissed && jsxRuntime.jsx('div', {style:{marginBottom:'8px',padding:'6px 10px',borderRadius:'5px',fontSize:'12px',lineHeight:1.5,background:'var(--dsw-alias-state-warning-bg, #fff7e6)',color:'var(--dsw-alias-state-warning-primary, #b26b00)',display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'8px'}},
+          jsxRuntime.jsx('span', {style:{flex:1,wordBreak:'break-word'}}, '⚠ ' + skillsDirWarning),
+          jsxRuntime.jsx('button', {onClick:function(){setWarningDismissed(true);},style:{padding:'2px 8px',borderRadius:'4px',border:'1px solid var(--dsw-alias-border-l3)',background:'transparent',cursor:'pointer',fontSize:'12px',flexShrink:0}}, 'Got it')
         ),
         // 设置：三项并排一行（原先是纵向 grid，占掉大半屏高度）。
         showSettings && jsxRuntime.jsx('div', {style:{marginBottom:'10px',padding:'10px 12px',background:'var(--dsw-alias-bg-layer-2)',borderRadius:'6px'}},

@@ -186,6 +186,58 @@ def check_panel_esm_safety(repo: Path) -> None:
         ok(f"面板产物的 ESM 兼容性正常（{scanned} 个 dist 无 require 调用）")
 
 
+def check_panel_skills_dir(repo: Path) -> None:
+    """面板插件：`cordis.patch.yml` 里的 `skillsDir` **不得**写死成 `~` 开头的路径。
+
+    2026-09-21 事故：`skillsDir: '~/.dsh/skills'` 在 NAS 上展开为
+    **容器内部的 /root/.dsh/skills**，而 DSH 只扫描它自己的 `$DSH_HOME/skills/`
+    （NAS 上 = `/vol2/@appdata/deepseek.harness/dsh-data/skills`）。
+    两者不一致会产生一类**全程不报错**的失效：
+
+      - 「安装」把技能复制到了没人扫描的目录 → 面板显示「已安装」、
+        文件也确实写进磁盘、接口全部 `ok:true`，但 DSH 永远看不到该技能；
+      - 「卸载」只删掉那份没人看的副本 → DSH 扫描目录里的原件纹丝不动。
+
+    用户感受就是**「点了安装和卸载都没生效」**，而且没有任何报错可查。
+
+    ## 判据
+    留空最好：插件会按 `config` > `DSH_PLUGIN_SKILLS_DIR` > `$DSH_HOME/skills`
+    > `~/.dsh/skills` 逐级推导，并在错位时于面板弹告警。
+    若确实要写死，必须是**绝对路径** —— `~` 家目录在容器里几乎不可能等于
+    DSH 数据根，写死它等于必然错位。
+    """
+    panels_root = repo / "panels"
+    if not panels_root.is_dir():
+        return
+
+    offenders: list[str] = []
+    scanned = 0
+    for plugin in sorted(p for p in panels_root.iterdir() if p.is_dir()):
+        patch = plugin / "cordis.patch.yml"
+        if not patch.is_file():
+            continue
+        scanned += 1
+        for lineno, line in enumerate(patch.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            code = line.split("#", 1)[0]          # 去掉行尾注释再判断
+            m = re.match(r"\s*skillsDir\s*:\s*['\"]?([^'\"\s]+)", code)
+            if not m:
+                continue
+            value = m.group(1)
+            if value.startswith("~"):
+                offenders.append(f"{plugin.name}/cordis.patch.yml:{lineno}  skillsDir: {value}")
+
+    if offenders:
+        bad(f"{len(offenders)} 处 skillsDir 写死成 ~ 开头的路径"
+            f"（DSH 扫描的是 $DSH_HOME/skills，家目录必错位）")
+        for o in offenders:
+            print(f"         {o}")
+        print("         改法：删掉该行留空（由插件逐级推导并自动告警），")
+        print("               或改成绝对路径，如 /vol2/@appdata/deepseek.harness/dsh-data/skills。")
+        print("         症状：点安装/卸载「没生效」—— 面板有反应、DSH 侧毫无变化，且不报错。")
+    else:
+        ok(f"面板插件的 skillsDir 配置正常（{scanned} 个 cordis.patch.yml 未写死 ~ 路径）")
+
+
 def check_panel(plugin: Path, name: str) -> None:
     """面板型：核心是「编译产物齐备、装了就能用」。"""
     # 服务端编译产物
@@ -808,6 +860,9 @@ def main() -> int:
 
         print("\n2.8 面板产物的 ESM 兼容性")
         check_panel_esm_safety(repo)
+
+        print("\n2.9 面板 skillsDir 落点（不得写死 ~ 路径）")
+        check_panel_skills_dir(repo)
 
         print("\n3. 脚本可执行位")
         check_exec_bits(repo)

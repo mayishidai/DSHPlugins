@@ -59,12 +59,163 @@ function expandHome(p: string): string {
   return p
 }
 
+/**
+ * 一个「候选 skills 目录」及其现状。
+ *
+ * 为什么要把候选摊开：`skillsDir` 决定「安装写到哪」，而 **DSH 只扫描它自己的
+ * `$DSH_HOME/skills/`**。两者一旦错位，就会出现本插件最阴的一类失效 ——
+ * 面板显示「已安装」、磁盘上文件也确实写好了、接口全部 `ok:true`、日志一行不报，
+ * 但 DSH 永远看不到那个技能；反过来「卸载」也只删掉那份没人看的副本，
+ * DSH 扫描目录里的原件纹丝不动。用户的感受就是**「点了安装和卸载都没生效」**。
+ *
+ * 所以这里不猜，而是把每个候选的「存不存在 / 装了几个技能」都算出来，
+ * 由 `/_health` 直接暴露给人核对。
+ */
+export interface SkillsDirCandidate {
+  dir: string
+  source: string
+  exists: boolean
+  /** 该目录下「有 SKILL.md 的合法子目录」个数 —— 用来判断它像不像真正的 skills 目录 */
+  skillCount: number
+}
+
+function probeSkillsDir(dir: string): { exists: boolean; skillCount: number } {
+  if (!existsSync(dir)) return { exists: false, skillCount: 0 }
+  try {
+    const skillCount = readdirSync(dir).filter((entry) => {
+      if (!isValidName(entry)) return false
+      try {
+        return statSync(join(dir, entry)).isDirectory() && existsSync(join(dir, entry, 'SKILL.md'))
+      } catch {
+        return false
+      }
+    }).length
+    return { exists: true, skillCount }
+  } catch {
+    return { exists: true, skillCount: 0 }
+  }
+}
+
+/**
+ * 列出所有候选 skills 目录（去重后按优先级排序）。
+ *
+ * 顺序 = 优先级：`config.skillsDir` > `DSH_PLUGIN_SKILLS_DIR` > `$DSH_HOME/skills`
+ * > `~/.dsh/skills` > 文档记载的 NAS 数据根（仅兜底，见 `resolveSkillsDir`）。
+ */
+export function skillsDirCandidates(explicit?: string): SkillsDirCandidate[] {
+  const raw: Array<{ dir: string; source: string }> = []
+  const push = (dir: string | undefined, source: string) => {
+    if (dir && dir.trim()) raw.push({ dir: expandHome(dir.trim()), source })
+  }
+
+  push(explicit, 'config.skillsDir')
+  push(process.env['DSH_PLUGIN_SKILLS_DIR'], 'env:DSH_PLUGIN_SKILLS_DIR')
+  push(process.env['DSH_HOME'] ? join(expandHome(process.env['DSH_HOME'].trim()), 'skills') : undefined, 'env:DSH_HOME')
+  push(join(homedir(), '.dsh', 'skills'), 'default:~/.dsh')
+  // 仓库文档（docs/development-runbook.md）记载的 NAS 数据根。
+  // 只作为**最后一个候选**：它既不会覆盖任何显式配置，也不会在别处可用时被选中，
+  // 仅在「主候选明显是空的、而它确实装着技能」这种毫无歧义的情况下兜底。
+  push('/vol2/@appdata/deepseek.harness/dsh-data/skills', 'documented:NAS')
+
+  const seen = new Set<string>()
+  const out: SkillsDirCandidate[] = []
+  for (const c of raw) {
+    const key = resolve(c.dir)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ ...c, ...probeSkillsDir(c.dir) })
+  }
+  return out
+}
+
+/**
+ * 解析 skills 目录。
+ *
+ * 三级策略，原则是**「人的显式配置永远赢，启发式只在毫无歧义时兜底」**：
+ *   ① 显式给出（`config.skillsDir` / `DSH_PLUGIN_SKILLS_DIR`）→ 直接用，不做任何纠偏；
+ *   ② 主候选（`$DSH_HOME/skills`，无 `DSH_HOME` 时 `~/.dsh/skills`）确实装着技能 → 用它；
+ *   ③ 主候选不装技能，而**恰好只有一个**候选装着 → 用它兜底。
+ *      若有多个候选都装着技能，则**不猜**，保持主候选不动，交给 `/_health` 报警
+ *      —— 猜错目录会把技能写到另一个地方，比不猜更危险。
+ */
 function resolveSkillsDir(ctx: any): string {
+  return resolveSkillsDirWithSource(ctx).dir
+}
+
+/** 与 `resolveSkillsDir` 同源，但额外回报「这个值是从哪来的」——用于自检与日志。 */
+export function resolveSkillsDirWithSource(ctx: any): { dir: string; source: string } {
   const config = ctx.get?.('config') as Record<string, unknown> | undefined
-  const raw = (config?.['skillsDir'] as string | undefined)
-    ?? process.env.DSH_PLUGIN_SKILLS_DIR
-    ?? DEFAULT_CONFIG.skillsDir()
-  return expandHome(raw)
+  const explicit = (config?.['skillsDir'] as string | undefined) ?? process.env['DSH_PLUGIN_SKILLS_DIR']
+  // ① 显式配置优先
+  if (explicit && String(explicit).trim()) {
+    return { dir: expandHome(String(explicit).trim()), source: 'config.skillsDir' }
+  }
+
+  const candidates = skillsDirCandidates()
+  const primary = candidates[0] ?? {
+    dir: DEFAULT_CONFIG.skillsDir(),
+    source: 'default:~/.dsh',
+    exists: false,
+    skillCount: 0,
+  }
+  // ② 主候选已经是「像样的 skills 目录」
+  if (primary.skillCount > 0) return { dir: primary.dir, source: primary.source }
+  // ③ 主候选不装技能时的兜底 —— **但仅限 DSH_HOME 未导出的情况**。
+  //    `$DSH_HOME` 一旦存在就是权威（DSH 就是按它扫描的），偏离它反而是错的；
+  //    只有主候选退化成「瞎猜的 ~/.dsh/skills」时，才允许用唯一定位去救。
+  if (!process.env['DSH_HOME']) {
+    const withSkills = candidates.filter((c) => c.skillCount > 0)
+    // 恰好一个候选装着技能才兜底；多个都有则不猜（猜错等于把技能写到另一个地方）
+    if (withSkills.length === 1) return { dir: withSkills[0].dir, source: `${withSkills[0].source}(兜底)` }
+  }
+  return { dir: primary.dir, source: primary.source }
+}
+
+/**
+ * 生成 skillsDir 的完整诊断：候选清单 + 「装的地方 ≠ DSH 扫的地方」告警。
+ *
+ * `/_health` 与 `/list` **共用这一个判断**，避免「自检端点说没事、面板却在报错」
+ * 这种两处判据漂移。
+ */
+export function describeSkillsDir(skillsDir: string, source?: string): {
+  source: string
+  candidates: SkillsDirCandidate[]
+  warning: string | null
+} {
+  const candidates = skillsDirCandidates()
+  const key = resolve(skillsDir)
+  let chosen = candidates.find((c) => resolve(c.dir) === key)
+  if (!chosen) {
+    // 解析值不在候选链里 → 它来自显式配置
+    chosen = { dir: skillsDir, source: source ?? 'config.skillsDir', ...probeSkillsDir(skillsDir) }
+    candidates.unshift(chosen)
+  }
+
+  const withSkills = candidates.filter((c) => c.skillCount > 0)
+  const othersWithSkills = withSkills.filter((c) => resolve(c.dir) !== key)
+  let warning: string | null = null
+
+  if (chosen.skillCount === 0 && othersWithSkills.length > 0) {
+    // 最明确的错位信号：当前这个目录一个技能都没有，别处却装着。
+    warning =
+      `当前 skillsDir（${skillsDir}）里没有任何技能，但另有目录装着：` +
+      othersWithSkills.map((c) => `${c.dir}（${c.skillCount} 个）`).join('、') +
+      `。插件读写的是前者，而 DSH 只扫描它自己的 $DSH_HOME/skills —— ` +
+      `两者不一致时，装/卸在面板上有反应、DSH 侧却毫无变化，且全程不报错。` +
+      `请把 config.skillsDir 设为 DSH 真正扫描的那个目录。`
+  } else if (chosen.skillCount > 0 && othersWithSkills.length > 0) {
+    // 多个位置都装着技能 → 无法确定 DSH 认哪个，提示人工确认（不自动猜）
+    warning =
+      `检测到多个目录都装着技能（当前使用的是 ${skillsDir}，${chosen.skillCount} 个）：` +
+      othersWithSkills.map((c) => `${c.dir}（${c.skillCount} 个）`).join('、') +
+      `。DSH 只会扫描其中一个，若技能装了不生效，请确认并把 config.skillsDir 指向正确的那个。`
+  } else if (!chosen.exists) {
+    warning =
+      `当前 skillsDir 不存在：${skillsDir}。安装会自动创建它，` +
+      `但若 DSH 扫描的是别的目录，装了也不会生效。`
+  }
+
+  return { source: chosen.source, candidates, warning }
 }
 
 /**
@@ -506,9 +657,17 @@ export const API_PREFIX = '/api/plugin-repo'
 export async function handleApiRequest(
   req: IncomingMessage,
   res: ServerResponse,
-  opts: { repoDir: string; skillsDir: string; pollInterval: number; showSidebarButton: boolean; sidebarTitle: string },
+  opts: {
+    repoDir: string
+    skillsDir: string
+    pollInterval: number
+    showSidebarButton: boolean
+    sidebarTitle: string
+    /** skillsDir 的来源（仅用于诊断展示；缺省时由 describeSkillsDir 反推） */
+    skillsDirSource?: string
+  },
 ): Promise<void> {
-  const { repoDir, skillsDir, pollInterval, showSidebarButton, sidebarTitle } = opts
+  const { repoDir, skillsDir, pollInterval, showSidebarButton, sidebarTitle, skillsDirSource } = opts
   const url = new URL(req.url || '', `http://${req.headers.host}`)
   const method = req.method || 'GET'
   // 兼容「宿主剥前缀」与「宿主保留全路径」两种约定，见 normalizeSubPath
@@ -529,6 +688,9 @@ export async function handleApiRequest(
           repoEntryCount = readdirSync(repoDir).filter((n) => isValidName(n)).length
         } catch { repoEntryCount = null }
       }
+      // skillsDir 诊断：把所有候选摊开。技能「装了却看不见」时先看这里 ——
+      // 一眼就能看出插件读写的位置和 DSH 扫描的位置是否错位。
+      const skills = describeSkillsDir(skillsDir, skillsDirSource)
       sendJson(res, {
         ok: true,
         plugin: name,
@@ -544,7 +706,12 @@ export async function handleApiRequest(
           repoEntryCount,
           skillsDir,
           skillsExists: existsSync(skillsDir),
+          skillsSource: skills.source,
+          skillsEntryCount: probeSkillsDir(skillsDir).skillCount,
         },
+        // 「装的地方 ≠ DSH 扫的地方」的告警（没有问题时为 null）
+        skillsDirWarning: skills.warning,
+        skillsDirCandidates: skills.candidates,
         config: { pollInterval, showSidebarButton, sidebarTitle },
         // 运行时自检：直接验证两个「会写盘」的操作在**当前模块系统下**可用。
         // 曾经的 bug 是 ESM 里误用 require，导致 /uninstall 恒返回 INTERNAL_ERROR
@@ -570,7 +737,17 @@ export async function handleApiRequest(
       })
     } else if (sub === '/list' && method === 'GET') {
       const plugins = listPlugins(repoDir, skillsDir)
-      sendJson(res, { ok: true, plugins, pollInterval })
+      // 把 skillsDir 诊断一并带回：面板就能在列表上方显示告警横幅，
+      // 用户不必自己去翻 /_health 才明白「装的地方 ≠ DSH 扫的地方」。
+      const skills = describeSkillsDir(skillsDir, skillsDirSource)
+      sendJson(res, {
+        ok: true,
+        plugins,
+        pollInterval,
+        skillsDir,
+        skillsDirSource: skills.source,
+        skillsDirWarning: skills.warning,
+      })
     } else if (sub === '/install' && method === 'POST') {
       const body = await readBody(req)
       const { name: pkgName } = JSON.parse(body || '{}')
@@ -616,7 +793,7 @@ export async function handleApiRequest(
  */
 export async function apply(ctx: any): Promise<void> {
   const repoDir = resolveRepoDir(ctx)
-  const skillsDir = resolveSkillsDir(ctx)
+  const { dir: skillsDir, source: skillsDirSource } = resolveSkillsDirWithSource(ctx)
   const pollInterval = resolvePollInterval(ctx)
   const showSidebarButton = resolveShowSidebarButton(ctx)
   const sidebarTitle = resolveSidebarTitle(ctx)
@@ -629,14 +806,26 @@ export async function apply(ctx: any): Promise<void> {
       path: API_PREFIX,
       // 转发到唯一实现（见 handleApiRequest 的注释：抽出来是为了能被测到）
       handler: (req: IncomingMessage, res: ServerResponse) =>
-        handleApiRequest(req, res, { repoDir, skillsDir, pollInterval, showSidebarButton, sidebarTitle }),
+        handleApiRequest(req, res, { repoDir, skillsDir, pollInterval, showSidebarButton, sidebarTitle, skillsDirSource }),
     })
 
     console.log(`[plugin-repo-manager] HTTP API registered at /api/plugin-repo`)
     console.log(`[plugin-repo-manager] repoDir: ${repoDir}`)
-    console.log(`[plugin-repo-manager] skillsDir: ${skillsDir}`)
+    console.log(`[plugin-repo-manager] skillsDir: ${skillsDir}  (来源: ${skillsDirSource})`)
     console.log(`[plugin-repo-manager] pollInterval: ${pollInterval}ms`)
     console.log(`[plugin-repo-manager] showSidebarButton: ${showSidebarButton}`)
+
+    // 启动即自检：skillsDir 一旦和 DSH 真正扫描的目录错位，
+    // 「安装/卸载」就会变成「面板有反应、DSH 毫无变化」且不报任何错。
+    // 把结论**在启动日志里喊出来**，不用等用户去翻 /_health。
+    const diag = describeSkillsDir(skillsDir, skillsDirSource)
+    if (diag.warning) {
+      console.warn(`[plugin-repo-manager] ⚠ skillsDir 可能配置有误：`)
+      console.warn(`[plugin-repo-manager] ⚠   ${diag.warning}`)
+      for (const c of diag.candidates) {
+        console.warn(`[plugin-repo-manager] ⚠   候选 ${c.source}: ${c.dir} (存在=${c.exists}, 技能数=${c.skillCount})`)
+      }
+    }
   } else {
     console.warn(`[plugin-repo-manager] webServer not available, HTTP API not registered`)
   }
@@ -645,6 +834,7 @@ export async function apply(ctx: any): Promise<void> {
   ctx.provide?.('pluginRepoConfig', {
     repoDir,
     skillsDir,
+    skillsDirSource,
     pollInterval,
     showSidebarButton,
     sidebarTitle,

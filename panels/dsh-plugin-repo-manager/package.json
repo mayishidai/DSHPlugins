@@ -42,7 +42,7 @@
     "build:server": "tsc -p tsconfig.build.json",
     "build:client": "node generate-client.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node scripts/test-isnewer.mjs && node scripts/test-install-update.mjs && node scripts/test-paths.mjs && node scripts/test-sidebar.mjs && node scripts/test-client-parity.mjs && node scripts/test-route-prefix.mjs && node scripts/test-api-e2e.mjs && node scripts/test-esm-safety.mjs",
+    "test": "node scripts/test-isnewer.mjs && node scripts/test-install-update.mjs && node scripts/test-paths.mjs && node scripts/test-sidebar.mjs && node scripts/test-client-parity.mjs && node scripts/test-route-prefix.mjs && node scripts/test-api-e2e.mjs && node scripts/test-esm-safety.mjs && node scripts/test-skills-dir.mjs",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
@@ -51,8 +51,12 @@
     "react-dom": "^18.2.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

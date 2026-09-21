@@ -1,6 +1,48 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 export declare const name = "dsh-plugin-repo-manager";
 /**
+ * 一个「候选 skills 目录」及其现状。
+ *
+ * 为什么要把候选摊开：`skillsDir` 决定「安装写到哪」，而 **DSH 只扫描它自己的
+ * `$DSH_HOME/skills/`**。两者一旦错位，就会出现本插件最阴的一类失效 ——
+ * 面板显示「已安装」、磁盘上文件也确实写好了、接口全部 `ok:true`、日志一行不报，
+ * 但 DSH 永远看不到那个技能；反过来「卸载」也只删掉那份没人看的副本，
+ * DSH 扫描目录里的原件纹丝不动。用户的感受就是**「点了安装和卸载都没生效」**。
+ *
+ * 所以这里不猜，而是把每个候选的「存不存在 / 装了几个技能」都算出来，
+ * 由 `/_health` 直接暴露给人核对。
+ */
+export interface SkillsDirCandidate {
+    dir: string;
+    source: string;
+    exists: boolean;
+    /** 该目录下「有 SKILL.md 的合法子目录」个数 —— 用来判断它像不像真正的 skills 目录 */
+    skillCount: number;
+}
+/**
+ * 列出所有候选 skills 目录（去重后按优先级排序）。
+ *
+ * 顺序 = 优先级：`config.skillsDir` > `DSH_PLUGIN_SKILLS_DIR` > `$DSH_HOME/skills`
+ * > `~/.dsh/skills` > 文档记载的 NAS 数据根（仅兜底，见 `resolveSkillsDir`）。
+ */
+export declare function skillsDirCandidates(explicit?: string): SkillsDirCandidate[];
+/** 与 `resolveSkillsDir` 同源，但额外回报「这个值是从哪来的」——用于自检与日志。 */
+export declare function resolveSkillsDirWithSource(ctx: any): {
+    dir: string;
+    source: string;
+};
+/**
+ * 生成 skillsDir 的完整诊断：候选清单 + 「装的地方 ≠ DSH 扫的地方」告警。
+ *
+ * `/_health` 与 `/list` **共用这一个判断**，避免「自检端点说没事、面板却在报错」
+ * 这种两处判据漂移。
+ */
+export declare function describeSkillsDir(skillsDir: string, source?: string): {
+    source: string;
+    candidates: SkillsDirCandidate[];
+    warning: string | null;
+};
+/**
  * 从请求 URL 中取出「相对本插件前缀」的子路径，并归一化为 `/list` 这种形式。
  *
  * ## 为什么不能直接 `url.pathname === '/list'`
@@ -113,6 +155,8 @@ export declare function handleApiRequest(req: IncomingMessage, res: ServerRespon
     pollInterval: number;
     showSidebarButton: boolean;
     sidebarTitle: string;
+    /** skillsDir 的来源（仅用于诊断展示；缺省时由 describeSkillsDir 反推） */
+    skillsDirSource?: string;
 }): Promise<void>;
 /**
  * 主 apply 函数

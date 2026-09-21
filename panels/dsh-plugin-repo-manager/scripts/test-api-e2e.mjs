@@ -69,9 +69,9 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r))
 const PORT = server.address().port
 
-function get(path) {
+function getOn(port, path) {
   return new Promise((resolve, reject) => {
-    const req = request({ host: '127.0.0.1', port: PORT, path, method: 'GET' }, (res) => {
+    const req = request({ host: '127.0.0.1', port, path, method: 'GET' }, (res) => {
       let body = ''
       res.on('data', (c) => (body += c))
       res.on('end', () => resolve({ status: res.statusCode, body }))
@@ -79,6 +79,9 @@ function get(path) {
     req.on('error', reject)
     req.end()
   })
+}
+function get(path) {
+  return getOn(PORT, path)
 }
 
 console.log('\n[1. 约定 A：宿主已剥前缀 → 直接打 "/list"]')
@@ -138,6 +141,53 @@ check('错误信息里含收到的子路径（便于定位）', String(nfJson?.e
 console.log('\n[7. 目录不存在 → 空列表而非异常]')
 const empty = dist.listPlugins('/definitely/not/exists', '/also/not/exists')
 check('返回空数组', Array.isArray(empty) && empty.length === 0)
+
+// ---- 8 / 9：skillsDir 错位的端到端证明 ----
+// 这是本次事故（「点了安装和卸载都没生效」）的防线。
+// 关键在于：面板横幅的数据**来自 /list 响应**，所以必须端到端证明
+// 这个字段真的会被传出去 —— 只测内部函数证明不了链路是通的。
+console.log('\n[8. /list 必须带上 skillsDir 诊断字段（面板横幅的数据源）]')
+const listJson = JSON.parse(a.body)
+check('响应含 skillsDirWarning 字段（无问题时为 null）', 'skillsDirWarning' in listJson, JSON.stringify(Object.keys(listJson)))
+check('响应含 skillsDir 字段', typeof listJson.skillsDir === 'string')
+check('响应含 skillsDirSource 字段（便于定位配置来源）', typeof listJson.skillsDirSource === 'string')
+
+console.log('\n[9. 真发生错位时 /list 必须报出告警（否则用户只能靠猜）]')
+// 复现真实故障：DSH 数据根（$DSH_HOME/skills）里装着技能，
+// 但插件被配置成读写另一个空目录 → 装/卸都有反应，DSH 侧永远看不到。
+const DSH_DATA = mkdtempSync(join(tmpdir(), 'dsh-data-e2e-'))
+mkdirSync(join(DSH_DATA, 'skills', 'lucky-api'), { recursive: true })
+writeFileSync(join(DSH_DATA, 'skills', 'lucky-api', 'SKILL.md'), '# lucky-api\n')
+const WRONG_SKILLS = mkdtempSync(join(tmpdir(), 'wrong-skills-e2e-'))
+const savedDshHome = process.env.DSH_HOME
+process.env.DSH_HOME = DSH_DATA
+
+const server2 = createServer((req, res) => {
+  handleApiRequest(req, res, {
+    repoDir: REPO,
+    skillsDir: WRONG_SKILLS,
+    pollInterval: 3000,
+    showSidebarButton: true,
+    sidebarTitle: '插件仓库',
+  })
+})
+await new Promise((r) => server2.listen(0, '127.0.0.1', r))
+const PORT2 = server2.address().port
+const listWrong = JSON.parse((await getOn(PORT2, PREFIX + '/list')).body)
+check('错位时 skillsDirWarning 非空', typeof listWrong.skillsDirWarning === 'string' && listWrong.skillsDirWarning.length > 0,
+  `实际=${listWrong.skillsDirWarning}`)
+check('告警文案点出了真正装着技能的目录', String(listWrong.skillsDirWarning || '').includes(join(DSH_DATA, 'skills')))
+check('告警里给了可执行的改法', String(listWrong.skillsDirWarning || '').includes('config.skillsDir'))
+
+const healthWrong = JSON.parse((await getOn(PORT2, PREFIX + '/_health')).body)
+check('/_health 也暴露出候选目录清单', Array.isArray(healthWrong.skillsDirCandidates) && healthWrong.skillsDirCandidates.length > 0)
+check('/_health 的候选里带技能数', healthWrong.skillsDirCandidates.some((c) => c.skillCount > 0))
+check('/_health 回报 skillsDir 来源', typeof healthWrong.paths?.skillsSource === 'string')
+
+server2.close()
+if (savedDshHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = savedDshHome
+rmSync(DSH_DATA, { recursive: true, force: true })
+rmSync(WRONG_SKILLS, { recursive: true, force: true })
 
 server.close()
 rmSync(REPO, { recursive: true, force: true })

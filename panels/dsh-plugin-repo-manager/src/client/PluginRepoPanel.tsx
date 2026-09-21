@@ -47,6 +47,16 @@ interface ApiResponse<T> {
   ok: boolean
   plugins?: T
   error?: { code: string; message: string; details?: string }
+  /** 当前生效的 skills 目录（后端解析结果） */
+  skillsDir?: string
+  /** skillsDir 的来源，如 config.skillsDir / env:DSH_HOME */
+  skillsDirSource?: string
+  /**
+   * 「插件读写的位置 ≠ DSH 扫描的位置」时的告警。
+   * 这类错位不报任何错：面板显示「已安装」、文件也写好了，但 DSH 看不到 ——
+   * 用户感受就是「点了安装和卸载都没生效」。所以必须显式提示出来。
+   */
+  skillsDirWarning?: string | null
 }
 
 export function PluginRepoPanel({
@@ -67,6 +77,8 @@ export function PluginRepoPanel({
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
   const [showSettings, setShowSettings] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [skillsDirWarning, setSkillsDirWarning] = useState<string | null>(null)
+  const [warningDismissed, setWarningDismissed] = useState(false)
 
   // 加载插件列表
   const loadPlugins = useCallback(async () => {
@@ -85,6 +97,8 @@ export function PluginRepoPanel({
       const data: ApiResponse<RepoPlugin[]> = await response.json()
       if (data.ok && data.plugins) {
         setPlugins(data.plugins)
+        // 后端每次都会带上 skillsDir 诊断；没有问题时是 null。
+        setSkillsDirWarning(data.skillsDirWarning ?? null)
         setLastUpdate(new Date())
       } else {
         setError(data.error?.message || '接口返回 OK=false')
@@ -339,6 +353,24 @@ export function PluginRepoPanel({
         }}>
           <span>{notice}</span>
           <button onClick={() => setNotice(null)} style={{ ...styles.smallButton }}>关闭</button>
+        </div>
+      )}
+
+      {/* skillsDir 错位告警。
+          这一类失效**全程不报错**：面板显示「已安装」、文件确实写进磁盘了、接口
+          全部 ok:true —— 但 DSH 扫描的是另一个目录，所以技能装了也看不见；
+          「卸载」同理只删掉那份没人看的副本。用户只会感觉「点了没生效」。
+          所以后端一发现错位就在这里直接说清楚，别让人去猜。 */}
+      {skillsDirWarning && !warningDismissed && (
+        <div style={{
+          marginBottom: '8px', padding: '6px 10px', borderRadius: '5px',
+          fontSize: '12px', lineHeight: 1.5,
+          background: 'var(--dsw-alias-state-warning-bg, #fff7e6)',
+          color: 'var(--dsw-alias-state-warning-primary, #b26b00)',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px',
+        }}>
+          <span style={{ flex: 1, wordBreak: 'break-word' }}>⚠ {skillsDirWarning}</span>
+          <button onClick={() => setWarningDismissed(true)} style={{ ...styles.smallButton }}>知道了</button>
         </div>
       )}
 

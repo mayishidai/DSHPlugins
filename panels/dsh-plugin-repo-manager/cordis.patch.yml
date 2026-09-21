@@ -8,7 +8,20 @@
       name: 'dsh-plugin-repo-manager'
       config:
         repoDir: '/vol1/1000/AI/DSHPlugin/skills'
-        skillsDir: '~/.dsh/skills'
+        # ⚠️ 不要在这里写死 `~/.dsh/skills`（曾经的配置，已改掉）。
+        #
+        # 那个值在 NAS 上指向的是**容器内部的 /root/.dsh/skills**，而 DSH 真正扫描的是
+        # 它自己的 `$DSH_HOME/skills/`（NAS 上 = /vol2/@appdata/deepseek.harness/dsh-data/skills）。
+        # 两者不一致会产生一类**完全不报错**的失效：面板显示「已安装」、文件也确实写进去了、
+        # 接口全部 ok:true，但 DSH 永远看不到该技能；「卸载」也只删掉那份没人看的副本。
+        # 用户感受就是「点了安装和卸载都没生效」。
+        #
+        # 留空即可：插件会按 config > DSH_PLUGIN_SKILLS_DIR > $DSH_HOME/skills > ~/.dsh/skills
+        # 逐级推导；若推导出的目录与真实位置不符，面板会直接弹告警横幅，
+        # GET /api/plugin-repo/_health 也会列出全部候选目录及各自的技能数。
+        #
+        # 确实需要写死时（例如 DSH 没有导出 DSH_HOME），取消下面这行注释并改成真实路径：
+        # skillsDir: '/vol2/@appdata/deepseek.harness/dsh-data/skills'
         pollInterval: 3000
         # 主界面左侧竖条上的图标按钮；点它直接打开「我的插件仓库」面板。
         # 设为 false 则完全不注册该槽位（不是渲染成空占位）。

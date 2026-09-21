@@ -119,13 +119,52 @@ const rel = require('path').relative(skillsDir, targetDir)   // ← ESM 里没�
 > 必须用**真实 ESM 模块**验证 —— `scripts/test-esm-safety.mjs` 就是这么做的，
 > 且额外静态断言「产物里不得出现 `require(`」。
 
-### `skillsDir` 陷阱
+### 点「安装 / 卸载」**没生效**（2026-09-21 已修）
 
-`skillsDir` 优先级：`cordis.patch.yml` 的 `skillsDir` > `DSH_PLUGIN_SKILLS_DIR` > `$DSH_HOME/skills`。
+**症状**：点「安装」，面板确实变成「已安装」；点「卸载」，也确实变回「未安装」
+—— 看起来都成功了，**但 DSH 那边毫无变化**：技能装了用不了，卸载了还在。
+没有报错、没有告警，一切接口都返回 `ok:true`。
 
-若 NAS 的 `DSH_HOME` 与 patch 里写死的 `~/.dsh/skills` **不一致**，
-面板会把技能装到 DSH 扫不到的地方 —— **装了不生效，且不报错**。
-用 `_health` 的 `skillsDir` 与 DSH 实际扫描目录比对即可确认。
+**根因**：`cordis.patch.yml` 把 `skillsDir` 写死成了 `'~/.dsh/skills'`。
+
+在 NAS 上 DSH 跑在容器里，`~` 展开是**容器内部的家目录**（如 `/root/.dsh/skills`），
+而 DSH 真正扫描的是它自己的 `$DSH_HOME/skills/`
+（NAS 上 = `/vol2/@appdata/deepseek.harness/dsh-data/skills`）。两者不是同一个地方，于是：
+
+| 操作 | 实际发生的事 | 你看到的现象 |
+|---|---|---|
+| 安装 | 技能被复制到 **DSH 不扫描**的目录 | 面板显示「已安装」，DSH 里找不到 |
+| 卸载 | 只删掉那份没人看的副本 | 面板显示「未安装」，DSH 里那份纹丝不动 |
+
+这类失效最恶劣的地方是**全程静默**：文件确实写进磁盘了、接口全部 `ok:true`、
+日志一行不报 —— 只有「技能没出现」这一个间接信号。
+
+**修复**（两层）：
+
+1. **配置不再写死**。插件按
+   `config.skillsDir` > `DSH_PLUGIN_SKILLS_DIR` > `$DSH_HOME/skills` > `~/.dsh/skills`
+   逐级推导；`cordis.patch.yml` 里那行已删除并留下说明。
+2. **错位会被主动喊出来**。一旦发现「当前目录一个技能都没有、别处却装着」，
+   面板会在列表上方弹**黄色告警横幅**（写明当前目录、真正装着技能的目录、
+   以及该怎么改），`/_health` 也会返回全部候选目录与各自的技能数。
+
+**自查一条命令**：
+
+```bash
+curl -s http://<DSH>/api/plugin-repo/_health | python3 -m json.tool
+# 看 paths.skillsDir / paths.skillsSource / skillsDirWarning / skillsDirCandidates
+```
+
+**若确实要写死**，必须是**绝对路径**，绝不能是 `~` 开头的：
+
+```yaml
+skillsDir: '/vol2/@appdata/deepseek.harness/dsh-data/skills'
+```
+
+> 仓库级守卫：`validate_repo.py` 的 **2.9** 会扫描所有
+> `panels/*/cordis.patch.yml`，一旦发现 `skillsDir` 写死成 `~` 开头就 FAIL。
+> 插件内守卫：`scripts/test-skills-dir.mjs`（解析优先级 + 兜底判据 + 告警逻辑），
+> `scripts/test-api-e2e.mjs` 第 [9] 节（端到端证明告警真的会传到面板）。
 
 ## 版本与更新机制
 
@@ -239,10 +278,13 @@ npm run typecheck    # 0 error
         showSidebarButton: true
 ```
 
+> **不要给 `skillsDir` 写 `~` 开头的路径**（详见上方排查章节）。
+> 留空最好：插件会逐级推导，并在推导结果与真实位置不符时于面板弹告警。
+
 | 配置项 | 环境变量 | 默认值 | 说明 |
 |---|---|---|---|
 | `repoDir` | `DSH_PLUGIN_REPO_DIR` | `/vol1/1000/AI/DSHPlugin/skills` | 仓库目录（按类型分层的根，通常是 `DSHPlugins/skills`） |
-| `skillsDir` | `DSH_PLUGIN_SKILLS_DIR` | `$DSH_HOME/skills` | 技能安装目标目录 |
+| `skillsDir` | `DSH_PLUGIN_SKILLS_DIR` | `$DSH_HOME/skills`（无 `DSH_HOME` 时 `~/.dsh/skills`） | 技能安装目标目录。**留空让插件推导**；要写死就用绝对路径 |
 | `pollInterval` | `DSH_PLUGIN_POLL_INTERVAL` | `3000` | 自动刷新间隔（毫秒） |
 | `showSidebarButton` | `DSH_PLUGIN_SHOW_SIDEBAR` | `true` | 是否显示主界面侧边栏按钮 |
 | `sidebarTitle` | `DSH_PLUGIN_SIDEBAR_TITLE` | 语言字典默认值 | 侧边栏按钮提示文案 |
@@ -280,18 +322,24 @@ dsh-plugin-repo-manager/
     ├── test-sidebar.mjs        # 侧边栏配置与注册测试（35 例）
     ├── test-client-parity.mjs  # 源码 / bundle 副本一致性（31 例，含布局尺寸同款检查）
     ├── test-route-prefix.mjs   # 路由前缀归一化（25 例）
-    ├── test-api-e2e.mjs        # HTTP API 端到端，真起 server（27 例）
-    └── test-esm-safety.mjs     # ESM 里禁用 require + 描述字段（22 例）
+    ├── test-api-e2e.mjs        # HTTP API 端到端，真起 server（36 例）
+    ├── test-esm-safety.mjs     # ESM 里禁用 require + 描述字段（22 例）
+    └── test-skills-dir.mjs     # skillsDir 解析 + 错位告警（23 例）
 ```
 
 ### HTTP API
 
 | 端点 | 方法 | 说明 |
 |---|---|---|
-| `/api/plugin-repo/_health` | GET | **自检**：路由解析、目录存在性、条目数、生效配置、运行时自检 |
-| `/api/plugin-repo/list` | GET | 列出所有插件（含 `description` 与 `hasUpdate`） |
+| `/api/plugin-repo/_health` | GET | **自检**：路由解析、目录存在性、条目数、生效配置、运行时自检、**skillsDir 候选清单** |
+| `/api/plugin-repo/list` | GET | 列出所有插件（含 `description`、`hasUpdate`，以及 **`skillsDirWarning`**） |
 | `/api/plugin-repo/install` | POST | 安装 / 更新（body: `{"name":"..."}`） |
 | `/api/plugin-repo/uninstall` | POST | 卸载（body: `{"name":"..."}`） |
+
+> **`/list` 额外带回三个诊断字段**：`skillsDir`（当前生效值）、
+> `skillsDirSource`（该值来自哪里，如 `config.skillsDir` / `env:DSH_HOME`）、
+> `skillsDirWarning`（错位时的中文告警文案，无问题时为 `null`）。
+> 面板把它渲染成列表上方的黄色横幅 —— 这是「装/卸没生效」唯一的可见信号。
 
 > **描述从哪来**：`list` 返回的 `description` 按
 > `manifest.json` → `SKILL.md` 的 frontmatter → `package.json` 顺序取第一个命中的，

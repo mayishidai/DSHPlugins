@@ -122,6 +122,29 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 > 修 bug 时务必连带确认**路径穿越防护仍有效**：`isInsideDir()` 要比旧实现更严 ——
 > 它还要拒绝 `skills` 与 `skills-other` 这类「同前缀不同目录」的情况。
 
+## 排查：点「安装 / 卸载」**没生效**
+
+和上面那条不同：这次**面板是有反应的**（安装后变「已安装」、卸载后变「未安装」），
+但 **DSH 那边毫无变化** —— 技能装了用不了、卸了还在。接口全部 `ok:true`，不报错。
+
+根因是 **`skillsDir` 指向了 DSH 不扫描的目录**。历史配置写死成 `~/.dsh/skills`，
+在容器里展开是 `/root/.dsh/skills`，而 DSH 扫的是 `$DSH_HOME/skills/`
+（NAS 上 = `/vol2/@appdata/deepseek.harness/dsh-data/skills`）。
+
+| 操作 | 实际发生 | 现象 |
+|---|---|---|
+| 安装 | 复制到 DSH 不扫描的目录 | 面板「已安装」，DSH 找不到 |
+| 卸载 | 只删掉那份没人看的副本 | 面板「未安装」，DSH 那份还在 |
+
+排查要点：
+
+1. 打 `/_health`，比 `paths.skillsDir` 与 `skillsDirCandidates` 里各目录的 `skillCount`；
+2. 若 `skillsDirWarning` 非空 —— 后端已经确认错位，照它的文案改即可
+   （面板也会把同一句话渲染成黄色横幅）；
+3. 修法是**删掉 `cordis.patch.yml` 里的 `skillsDir`** 让它自动推导，
+   或写成绝对路径；**绝不能写 `~` 开头**。
+4. 仓库级守卫 `validate_repo.py` **2.9** 会拦住写死 `~` 路径的回归。
+
 ## 描述字段
 
 `/list` 返回的 `description` 依次从 `manifest.json` → `SKILL.md` frontmatter →
@@ -153,7 +176,7 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 | 配置项 | 环境变量 | 默认值 | 说明 |
 |---|---|---|---|
 | `repoDir` | `DSH_PLUGIN_REPO_DIR` | `/vol1/1000/AI/DSHPlugin/skills` | 仓库目录（按类型分层的根） |
-| `skillsDir` | `DSH_PLUGIN_SKILLS_DIR` | `$DSH_HOME/skills` | 技能安装目标目录 |
+| `skillsDir` | `DSH_PLUGIN_SKILLS_DIR` | `$DSH_HOME/skills` | 技能安装目标目录。**留空让插件推导**；要写死只能用绝对路径（不能 `~` 开头） |
 | `pollInterval` | `DSH_PLUGIN_POLL_INTERVAL` | `3000` | 自动刷新间隔（毫秒） |
 | `showSidebarButton` | `DSH_PLUGIN_SHOW_SIDEBAR` | `true` | 是否显示主界面侧边栏按钮 |
 | `sidebarTitle` | `DSH_PLUGIN_SIDEBAR_TITLE` | 语言字典默认值 | 侧边栏按钮提示文案 |
@@ -187,7 +210,7 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 npm install          # 首次
 npm run typecheck    # 期望 0 error
 npm run build        # 服务端 → dist/，客户端 → client/client.js
-npm test             # 八套，共 201 例
+npm test             # 九套，共 224 例
 ```
 
 > 改过 `src/client/*` 或 `generate-client.mjs` 后必须重跑 `npm run build`；
