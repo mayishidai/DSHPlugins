@@ -8,7 +8,7 @@
 
 | 目录 | 放什么 | 当前收录 |
 |---|---|---|
-| [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [game-dev-workflow](skills/game-dev-workflow/)、[lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/)、[cloudflare-tunnel](skills/cloudflare-tunnel/)、[jdgold](skills/jdgold/)、[Cloudflare 官方技能 14 个](docs/upstream/cloudflare-skills/) |
+| [`skills/`](skills/) | **技能型**能力（有 `SKILL.md`，DSH 扫描发现） | [game-dev-workflow](skills/game-dev-workflow/)、[app-dev-workflow](skills/app-dev-workflow/)、[lucky-api](skills/lucky-api/)、[hello-plugin](skills/hello-plugin/)、[cloudflare-tunnel](skills/cloudflare-tunnel/)、[jdgold](skills/jdgold/)、[Cloudflare 官方技能 14 个](docs/upstream/cloudflare-skills/) |
 | [`agents/`](agents/) | **智能体 / 专家包**（角色定义，非能力） | _暂无_ |
 | [`mcps/`](mcps/) | **MCP 服务配置**（配置片段 + 启动脚本，不含凭据） | [hindsight](mcps/hindsight/) |
 | [`panels/`](panels/) | **运行时面板插件**（DSH extensions 双半包，带 UI） | [dsh-plugin-repo-manager](panels/dsh-plugin-repo-manager/) |
@@ -17,8 +17,14 @@
 
 - **game-dev-workflow**（技能） - 游戏开发全流程团队协作系统
   - 策划设计 → 程序拆单实现 ∥ 美术 UI/动效/特效设计 → 表现接入调优 → QA → BUG 修复 → 复盘沉淀
-  - 强制全程留痕（项目根 `gameflow/` 痕迹目录，与代码分离，WS-ID 全链路关联），适配多 agent 并行开发
+  - 强制全程留痕（项目根 `.gameflow/` 痕迹目录，与代码分离，WS-ID 全链路关联），适配多 agent 并行开发
   - 含角色章程 / 操作 runbook / 模板 / 经验回流（`references/`）与 `gf.sh` 入口
+- **app-dev-workflow**（技能） - 应用开发全流程团队协作系统
+  - 是 `game-dev-workflow` 的**应用领域孪生版**：阶段 / 门禁 / ID 体系 / 指令集 / 模板数量 / CONFIG 字段
+    结构完全一致，只换领域语汇（痕迹目录 `.appflow/`、`scripts/af.sh`）
+  - 产品设计 → 开发拆单实现 ∥ UI/UX 设计（界面/动效/视觉反馈）→ 联调与体验调优 → QA → BUG 修复 → 复盘沉淀
+  - 两侧一致性由 `scripts/tests/test-skill-parity.py` 逐项把关（差异只能落在声明的映射表内），
+    并有反向回归 `test-skill-parity-negatives.py` 证明该守卫不会空转
 - **dsh-plugin-repo-manager**（面板） - 主界面侧边栏图标按钮 + 设置面板 tab 里的「我的插件仓库」
   - 侧边栏按钮入口 / Skill 列表展示 / 安装卸载（带确认）/ 批量操作 / 轮询刷新（默认 3 秒）
 - **lucky-api**（技能） - 调用自建 Lucky 实例的 HTTP API
@@ -161,6 +167,8 @@ make uninstall-panel               # 面板（从备份完整还原 package.json
 ```
 DSHPlugins/
 ├── skills/                         # 技能型插件（SKILL.md，DSH 扫描发现）
+│   ├── game-dev-workflow/          #   游戏开发全流程协作（痕迹目录 .gameflow/，gf.sh 入口）
+│   ├── app-dev-workflow/           #   应用开发全流程协作（上面那个的孪生版，.appflow/，af.sh 入口）
 │   ├── lucky-api/                  #   Lucky 实例 API 调用（零依赖客户端 + 接口清单）
 │   ├── hello-plugin/               #   示例技能
 │   ├── cloudflare-tunnel/          #   本地服务暴露到公网（Quick / Named Tunnel，需 cloudflared）

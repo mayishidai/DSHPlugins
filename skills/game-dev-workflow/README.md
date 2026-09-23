@@ -10,19 +10,25 @@
 - **每一步需要可单独触发**：新立项、补拆一张卡、修一个 BUG、单独 QA，Skill 的指令路由天然支持按需调用；Agent 只能整体运行。
 - **多 agent 协作不受影响**：Skill 内置"多 agent 编排规范"（roles.md + multi-agent.md），主控 AI 按规范把策划 / 程序 / 美术 / QA 派发为并行子 agent——**skill 定义团队，agent 是它的运行时实例**。
 
-## 安装（让 ZCode 发现它）
+## 安装（让 AI 工具发现它）
 
 ```bash
-# 方式一：装到用户级（所有项目可用）
-mkdir -p ~/.zcode/skills && cp -r /vol1/1000/AI/Skills/game-dev-workflow ~/.zcode/skills/
+# 方式一：装到用户级（所有项目可用）—— WorkBuddy 用 ~/.workbuddy/skills/，DSH 用 $DSH_HOME/skills/
+mkdir -p ~/.workbuddy/skills && cp -r <仓库>/skills/game-dev-workflow ~/.workbuddy/skills/
 
 # 方式二：装到某个游戏项目（仅该项目可用，推荐团队仓库统一放置）
-cd <你的游戏项目> && mkdir -p .zcode/skills && cp -r /vol1/1000/AI/Skills/game-dev-workflow .zcode/skills/
+cd <你的游戏项目> && mkdir -p .workbuddy/skills && cp -r <仓库>/skills/game-dev-workflow .workbuddy/skills/
 ```
 
 ## 在游戏项目里启用流程
 
-对 AI 说"初始化 gameflow"或执行 `/game-dev-workflow init`，会在项目根创建 `gameflow/` 痕迹目录。
+对 AI 说"初始化 gameflow"或执行 `/game-dev-workflow init`，会在项目根创建 **`.gameflow/` 痕迹目录**。
+点号前缀 = 隐藏目录：Unity 导入时忽略它且**不生成 `.meta`**，Godot **不会把它打进导出包**，
+所以痕迹放在游戏项目根不会污染构建，也不需要在引擎里做任何 exclude 配置。
+
+⚠️ 若项目 `.gitignore` 里有 `.*` / `**/.*`（很多引擎项目模板自带），它会连 `.gameflow/` 一起吞掉，
+需按 `references/trace-spec.md` §1.2 补两行放行，否则痕迹进不了版本控制
+（这个失效是**可见的**：`git add` 会直接报 ignored；`gf.sh init` 也会预先提示补丁行）。
 
 ## 快速上手（指令 = 流程步骤，可任意单独调用）
 
@@ -40,7 +46,7 @@ cd <你的游戏项目> && mkdir -p .zcode/skills && cp -r /vol1/1000/AI/Skills/
 
 ## 同学如何贡献经验
 
-1. 项目内的坑：直接让 AI 执行 `lesson`，或编辑项目的 `gameflow/LESSONS.md`。
+1. 项目内的坑：直接让 AI 执行 `lesson`，或编辑项目的 `.gameflow/LESSONS.md`。
 2. 跨项目通用经验：提交到本 skill 的 `references/knowledge/lessons.md`（追加 L-xxx 条目），
    并在 `CHANGELOG.md` 登记一笔。**只追加，不改写历史条目。**
 3. 规范本身的修订：改对应 references 文件 + CHANGELOG 登记 + 说明动机（最好链接来源 WS）。

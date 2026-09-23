@@ -7,33 +7,33 @@
 
 ---
 
-## §1 `init` —— 在游戏项目初始化痕迹目录
+## §1 `init` —— 在应用项目初始化痕迹目录
 
 **用途**：项目第一次接入本流程时执行一次。
-**前置**：目标是一个 git 仓库的游戏项目；项目根无 `.gameflow/`。
+**前置**：目标是一个 git 仓库的应用项目；项目根无 `.appflow/`。
 **步骤**：
-1. 创建 `.gameflow/`：`CONFIG.md`（填引擎、代码目录、美术目录、分支策略、G1/G5 是否人工）、
+1. 创建 `.appflow/`：`CONFIG.md`（填技术栈、代码目录、UI/UX 设计目录、分支策略、G1/G5 是否人工）、
    `INDEX.md`（空表）、`LESSONS.md`（空库）。
-2. 从本 skill `references/templates/` 复制全部模板到 `.gameflow/.templates/`（项目自包含，
+2. 从本 skill `references/templates/` 复制全部模板到 `.appflow/.templates/`（项目自包含，
    之后克隆项目的人不开本 skill 也能读懂痕迹格式）。
-3. **确认 `.gitignore` 放行痕迹目录**。不少引擎项目模板自带 `.*` / `**/.*`（本意是忽略
-   `.vs/` `.idea/`），它会**连 `.gameflow/` 一起吞掉**。需要追加两行，且**两行都要**：
+3. **确认 `.gitignore` 放行痕迹目录**。不少技术栈项目模板自带 `.*` / `**/.*`（本意是忽略
+   `.vs/` `.idea/`），它会**连 `.appflow/` 一起吞掉**。需要追加两行，且**两行都要**：
 
    ```gitignore
-   !.gameflow/
-   !.gameflow/**   # 必需：上一行只放行目录本身，.templates/ 仍会被吃掉
+   !.appflow/
+   !.appflow/**   # 必需：上一行只放行目录本身，.templates/ 仍会被吃掉
    ```
 
-   判定交给 git 自己：`git check-ignore -v .gameflow/CONFIG.md` **有输出即未放行**。
+   判定交给 git 自己：`git check-ignore -v .appflow/CONFIG.md` **有输出即未放行**。
    完整实测对照见 trace-spec.md §1.2。
-4. `git add .gameflow/ && git commit -m "[gameflow] init"`（或按项目分支策略）。
+4. `git add .appflow/ && git commit -m "[appflow] init"`（或按项目分支策略）。
 
-   > commit message 沿用 `[gameflow] init`，不随目录改名：它是**流程标签**而非目录名，
-   > 改掉会让老项目的 `git log --grep` 习惯断档。同理，对用户说的口头触发语仍是"初始化 gameflow"。
-5. 也可用 `bash <skill>/scripts/gf.sh init <项目根>`：它会完成 1、2 并**预检第 3 步**——
+   > commit message 沿用 `[appflow] init`，不随目录改名：它是**流程标签**而非目录名，
+   > 改掉会让老项目的 `git log --grep` 习惯断档。同理，对用户说的口头触发语仍是"初始化 appflow"。
+5. 也可用 `bash <skill>/scripts/af.sh init <项目根>`：它会完成 1、2 并**预检第 3 步**——
    发现危险规则时直接打印补丁行，不用等到 `git add` 才撞错。四个子命令都接受绝对路径，
    **可以从任意 cwd 调用**。
-**产出**：`.gameflow/` 目录骨架。
+**产出**：`.appflow/` 目录骨架。
 **完成判定**：CONFIG.md 无空项；模板齐全；`.gitignore` 已放行；已提交。
 
 ---
@@ -45,24 +45,24 @@
 **输入**：需求原话（必须保留原文）+ 提出人 + 背景。
 **步骤**：
 1. 按 pipeline.md S0 六步执行（原样记录 → 背景 → 集中澄清 → 分类定级 → 查重 → 建 WS）。
-2. WS 命名：`WS-yyyymmdd-slug`（slug 用英文小写短词，如 `daily-shop`）。
+2. WS 命名：`WS-yyyymmdd-slug`（slug 用英文小写短词，如 `order-filter`）。
 3. 用模板创建 `00-intake.md`；INDEX.md 增加一行；timeline 首条。
 4. 问用户澄清问题的时机：一次性问全，不要挤牙膏式反复问。
-**产出**：`.gameflow/WS-.../00-intake.md`、INDEX 行、timeline 首条。
+**产出**：`.appflow/WS-.../00-intake.md`、INDEX 行、timeline 首条。
 **完成判定**：G0 清单全过。
 **错误处理**：需求与既有 WS 重复 → 不新建，在双方 intake 互相关联并合并讨论；
 需求其实是 BUG → 仍建 WS（type=bugfix），bug 处理引用该 WS。
 
 ---
 
-## §3 `design` —— 策划设计文档
+## §3 `design` —— 产品设计文档
 
-**用途**：把 intake 变成可开发的设计。**可派发策划子 agent**。
+**用途**：把 intake 变成可开发的设计。**可派发产品经理子 agent**。
 **前置**：G0 已过。
 **输入**：00-intake.md；存量系统代码与文档。
 **步骤**：
 1. 按 pipeline.md S1 的 13 步执行；重点：现状调研要落到"现状与约束"一节；
-   数值三件套（默认值/区间/极端行为）；UI 需求点表单独成节（美术唯一输入接口）；
+   参数三件套（默认值/区间/极端行为）；UI 需求点表单独成节（UI/UX 设计唯一输入接口）；
    验收标准编号 `DS-n`。
 2. 重要取舍写 `decisions/D-xx`。
 3. 草稿完成后自检 G1 清单，再交门禁（人工或配置为自动）。
@@ -79,7 +79,7 @@
 **前置**：G1 已过（增量拆单除外——增量只需目标 WS 处于 dev/qa）。
 **输入**：01-design.md。
 **步骤**：
-1. 按 pipeline.md S2A 原则拆卡：0.5~2 人日；表现/逻辑分卡；公共底座先行；
+1. 按 pipeline.md S2A 原则拆卡：0.5~2 人日；体验/逻辑分卡；公共底座先行；
    每卡验收标准 + touches-files + 估时（乐观/现实）。
 2. 编号递增复用：新卡取任务板当前最大 T## +1，**不复用已取消卡的编号**。
 3. 生成任务卡文件、更新任务板（DAG、并行组、状态列）。
@@ -91,25 +91,25 @@
 
 ---
 
-## §5 `art` —— 美术设计（UI / 动效 / 特效）
+## §5 `art` —— UI/UX 设计（UI / 动效 / 视觉反馈）
 
-**用途**：产出程序可照着接入的表现设计。**可与 breakdown 同时进行；可派发美术子 agent**。
+**用途**：产出开发可照着接入的体验设计。**可与 breakdown 同时进行；可派发UI/UX 设计子 agent**。
 **前置**：G1 已过。
-**输入**：01-design.md 的 UI 需求点表 + 数值（数值决定界面元素量）+ CONFIG.md 美术规范。
+**输入**：01-design.md 的 UI 需求点表 + 参数（参数决定页面元素量）+ CONFIG.md 设计规范。
 **步骤**：
-1. 按 pipeline.md S2B 八步执行（风格基准 → 适配 → 界面 → 动效 → 特效 → 素材清单 → 对齐检查 → 配合需求回流）。
-2. 产出物文件（图 / 动效描述 / storyboard）放项目美术目录或 WS 目录 `art-assets/`，
-   03-art-design.md 中只放**链接与说明**，不内嵌大文件。
-3. 对齐检查表逐条打勾；发现设计矛盾 → 报主控，**美术不得脑补玩法语义**。
-**产出**：`03-art-design.md`（+ art-assets/ 链接）。
+1. 按 pipeline.md S2B 八步执行（风格基准 → 适配 → 页面 → 动效 → 视觉反馈 → 设计资产清单 → 对齐检查 → 配合需求回流）。
+2. 产出物文件（图 / 动效描述 / storyboard）放项目UI/UX 设计目录或 WS 目录 `design-assets/`，
+   03-design-visual.md 中只放**链接与说明**，不内嵌大文件。
+3. 对齐检查表逐条打勾；发现设计矛盾 → 报主控，**UI/UX 设计不得脑补功能语义**。
+**产出**：`03-design-visual.md`（+ design-assets/ 链接）。
 **完成判定**：G2' 清单全过。
-**错误处理**：素材需要程序工具支持 → 需求提给主控走增量拆单，美术侧任务标 `blocked(依赖 T##)`。
+**错误处理**：设计资产需要开发工具支持 → 需求提给主控走增量拆单，UI/UX 设计侧任务标 `blocked(依赖 T##)`。
 
 ---
 
 ## §6 `implement` —— 按卡实现
 
-**用途**：实现一张或多张任务卡。**可派发程序子 agent ×N（同并行组、文件不冲突）**。
+**用途**：实现一张或多张任务卡。**可派发开发子 agent ×N（同并行组、文件不冲突）**。
 **前置**：目标卡 `ready`（依赖全 done）；未被其他执行者持有（doing 状态的卡禁止抢）。
 **输入**：任务卡 T##；01-design.md 相关节；相关 lessons 条目。
 **步骤**：
@@ -126,19 +126,19 @@
 
 ---
 
-## §7 `integrate` —— 接入表现与调优
+## §7 `integrate` —— 接入体验与调优
 
-**用途**：把美术产出接入逻辑并调优，全程记录。**派发单一程序子 agent（收口角色）**。
+**用途**：把UI/UX 设计产出接入逻辑并调优，全程记录。**派发单一开发子 agent（收口角色）**。
 **前置**：G4 前置 = 相关任务 done + G2' 已过。
-**输入**：03-art-design.md、done 的任务、性能预算（01-design.md）。
+**输入**：03-design-visual.md、done 的任务、性能预算（01-design.md）。
 **步骤**：
-1. 按 pipeline.md S4 五步执行：接入清单（逐项对照美术设计）→ 逐项接入 → 调优会（前值/后值/理由/效果）→
-   性能与手感验收 → 占位资源登记。
+1. 按 pipeline.md S4 五步执行：接入清单（逐项对照UI/UX 设计）→ 逐项接入 → 调优会（前值/后值/理由/效果）→
+   性能与交互体验验收 → 占位资源登记。
 2. 接入本身也是开发行为：改动对应任务卡（或主控补"接入卡"），提交同样带 `[WS][T##]`。
 3. 调优参数记录格式见 templates/integration-log.md，**一条都不许省**。
 **产出 / 更新**：`04-integration-log.md`、相关任务卡、timeline、代码提交。
 **完成判定**：G4 清单全过。
-**错误处理**：美术素材缺失/不符 → 登记占位并给美术回流问题清单（不阻塞后续项接入）；
+**错误处理**：UI/UX 设计设计资产缺失/不符 → 登记占位并给UI/UX 设计回流问题清单（不阻塞后续项接入）；
 性能不达标 → 记录数据与瓶颈定位，超预算需 D-xx 决策（降规格 or 接受偏差）。
 
 ---
@@ -194,7 +194,7 @@ QA 中发现设计缺陷 → 走 `bug` 指令的"设计缺陷分支"，不得只
    - 门禁回顾：每个 G 上卡了几次、为什么。
 2. 三问（保持 / 避免 / 流程改进），改进项必须有负责人与去向（新卡 / backlog / 规范修订）。
 3. 经验分流：逐条判定"去掉项目名仍成立？"→ 成立：入 skill lessons.md（分配 L-xxx）；
-   否则：入项目 .gameflow/LESSONS.md。
+   否则：入项目 .appflow/LESSONS.md。
 4. 涉及 skill 文件修改的（lessons / checklists / 模板 / 规范本身）→ 同时登记 skill CHANGELOG.md。
 **产出 / 更新**：`06-retrospective.md`、lessons 入库、CHANGELOG、timeline、WS 状态 `closed`。
 **完成判定**：G7 清单全过（含"≥1 条经验入库或书面说明为何没有"）。
@@ -207,7 +207,7 @@ QA 中发现设计缺陷 → 走 `bug` 指令的"设计缺陷分支"，不得只
 **前置**：无。
 **步骤**：
 1. 判定级别：通用（去项目名仍成立）→ skill `references/knowledge/lessons.md` 追加 L-xxx；
-   项目级 → 项目 `.gameflow/LESSONS.md` 追加。
+   项目级 → 项目 `.appflow/LESSONS.md` 追加。
 2. 条目格式（严格）：`L-xxx | 一句话标题`，元信息行（日期/阶段/角色/标签），正文三段：
    **情境**（什么背景下踩的）/ **教训**（错在哪、代价是什么）/ **对策**（下次具体怎么做，可执行）。
 3. 必须带来源（WS-ID / BUG-ID，或"评审讨论"）；通用条目入库后登记 skill CHANGELOG。
@@ -224,8 +224,8 @@ QA 中发现设计缺陷 → 走 `bug` 指令的"设计缺陷分支"，不得只
 2. 单 WS：状态 + 各阶段产出文件链接 + 最近 5 条 timeline + 未决项（blocked 卡 / open BUG / 未决问题）。
 3. 按 ID 检索（WS/T/BUG/QA-R/D/L 任意 ID 或关键词）：
    ```bash
-   # 在项目根执行；或用 bash <skill路径>/scripts/gf.sh find <ID或关键词>
-   grep -rn "<ID>" .gameflow/ <代码目录> <美术目录>
+   # 在项目根执行；或用 bash <skill路径>/scripts/af.sh find <ID或关键词>
+   grep -rn "<ID>" .appflow/ <代码目录> <UI/UX 设计目录>
    git log --oneline --grep="<ID>" --all
    ```
 4. AI 回答时必须引用文件路径与行号级别的证据，不许凭记忆复述。
@@ -239,11 +239,11 @@ QA 中发现设计缺陷 → 走 `bug` 指令的"设计缺陷分支"，不得只
 |---|---|---|---|
 | init | — | — | 主控 |
 | intake | S0 | G0 | 主控 |
-| design | S1 | G1(人工) | 策划（可子 agent） |
+| design | S1 | G1(人工) | 产品经理（可子 agent） |
 | breakdown | S2A | G2 | 主控 |
-| art | S2B | G2' | 美术（可子 agent） |
-| implement | S3 | G3(逐卡) | 程序 ×N（可子 agent） |
-| integrate | S4 | G4 | 程序收口（单子 agent） |
+| art | S2B | G2' | UI/UX 设计（可子 agent） |
+| implement | S3 | G3(逐卡) | 开发 ×N（可子 agent） |
+| integrate | S4 | G4 | 开发收口（单子 agent） |
 | qa | S5 | G5(人工) | QA（可子 agent） |
 | bug | S5 内循环 | BUG 卡六段完整 | 主控登记 + 修复卡 |
 | retro | S7 | G7 | 主控 |

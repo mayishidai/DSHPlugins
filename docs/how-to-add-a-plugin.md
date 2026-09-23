@@ -198,10 +198,13 @@ export default { name, apply }   // ← 互操作兜底
 
   ```bash
   cd /vol1/1000/AI/DSHPlugin
-  bash scripts/preflight.sh                    # 安装前自检
-  python3 scripts/validate_repo.py             # 结构 / 契约 / 名字一致性
-  python3 scripts/tests/test_cred_parity.py    # 凭据粗筛一致性守卫
-  node scripts/tests/test-panel-resolve.mjs    # 面板可加载性（仅面板型相关）
+  bash scripts/preflight.sh                            # 安装前自检
+  python3 scripts/validate_repo.py                     # 结构 / 契约 / 名字一致性
+  python3 scripts/tests/test_cred_parity.py            # 凭据粗筛一致性守卫
+  node scripts/tests/test-panel-resolve.mjs            # 面板可加载性（仅面板型相关）
+  bash scripts/tests/test-profile-resolve.sh           # DSH profile 运行时探测
+  python3 scripts/tests/test-skill-parity.py           # 镜像技能对齐（仅镜像技能相关）
+  python3 scripts/tests/test-skill-parity-negatives.py # 上面那条守卫的反向回归
   ```
 
   或一条命令跑全套：`make verify`
@@ -221,5 +224,9 @@ export default { name, apply }   // ← 互操作兜底
       并在 `SOURCE.md` 里把这处改动**枚举出来**（只改 mode、内容未动）。
 - [ ] 引入 zip 分发包：包内置默认凭据若走豁免，`KNOWN_PUBLIC_KEYS`（Python）与
       `KNOWN_PUBLIC_KEYS_RE`（Bash）**两处已同步**，且一致性测试仍通过
-- [ ] **动过凭据判据的话**：`make verify` 四套全绿（两套实现判定必须一致，
+- [ ] **动过凭据判据的话**：`make verify` 七步全绿（两套实现判定必须一致，
       否则其中一套失去信号价值）
+- [ ] 新增**镜像技能**（与已有技能「同骨架、只换领域词汇」）：已把差异登记进
+      `scripts/tests/test-skill-parity.py` 的 `FILE_MAP` / `TERM_MAP` / 块名单，
+      并确认第 7 步反向回归在注入漂移时真的报错 —— 映射表**不许为了「跑绿」而放宽**
+      （放宽即等于取消守卫，只是看不出来而已）

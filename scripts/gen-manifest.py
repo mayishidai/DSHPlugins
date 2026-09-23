@@ -67,7 +67,7 @@ SKILL_PROVENANCE: dict[str, str] = {
 
 # 本仓库自研技能：manifest.json 是手写的（含自定义 keywords/scripts 字段），
 # 不来自任何上游，**绝不能被本脚本覆盖**。仅用于 --list 正确归类 + 写入护栏。
-LOCAL_SKILLS = {"hello-plugin", "lucky-api"}
+LOCAL_SKILLS = {"hello-plugin", "lucky-api", "game-dev-workflow", "app-dev-workflow"}
 
 # 不带技能名时的刷新范围：Cloudflare 官方 14 个（保持历史行为不变）。
 DEFAULT_SKILLS = [

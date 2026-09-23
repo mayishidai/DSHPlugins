@@ -96,21 +96,27 @@ check: ## 校验仓库中所有插件（只读）
 		fi; \
 	done
 
-verify: ## 跑仓库侧全部校验（Python 校验 + Bash 自检 + 一致性回归 + 面板可加载性 + 宿主路径探测）
-	@echo "== 1/5 仓库结构校验（validate_repo.py）=="
+verify: ## 跑仓库侧全部校验（Python 校验 + Bash 自检 + 一致性回归 + 面板可加载性 + 宿主路径探测 + 镜像技能对齐）
+	@echo "== 1/7 仓库结构校验（validate_repo.py）=="
 	@python3 scripts/validate_repo.py || exit 1
 	@echo ""
-	@echo "== 2/5 安装前自检（preflight.sh）=="
+	@echo "== 2/7 安装前自检（preflight.sh）=="
 	@bash scripts/preflight.sh || exit 1
 	@echo ""
-	@echo "== 3/5 凭据粗筛一致性回归（两套实现判定必须一致）=="
+	@echo "== 3/7 凭据粗筛一致性回归（两套实现判定必须一致）=="
 	@python3 scripts/tests/test_cred_parity.py || exit 1
 	@echo ""
-	@echo "== 4/5 面板可加载性（按包名真实解析 + 导出形态）=="
+	@echo "== 4/7 面板可加载性（按包名真实解析 + 导出形态）=="
 	@node scripts/tests/test-panel-resolve.mjs || exit 1
 	@echo ""
-	@echo "== 5/5 DSH profile 运行时探测（真实 lib + 假布局）=="
+	@echo "== 5/7 DSH profile 运行时探测（真实 lib + 假布局）=="
 	@bash scripts/tests/test-profile-resolve.sh || exit 1
+	@echo ""
+	@echo "== 6/7 镜像技能结构对齐（game-dev-workflow ↔ app-dev-workflow）=="
+	@python3 scripts/tests/test-skill-parity.py || exit 1
+	@echo ""
+	@echo "== 7/7 对齐守卫的反向回归（注入漂移，证其非空转）=="
+	@python3 scripts/tests/test-skill-parity-negatives.py || exit 1
 	@echo ""
 	@echo "✓ 全部校验通过"
 

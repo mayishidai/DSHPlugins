@@ -1,0 +1,13 @@
+{
+  "name": "app-dev-workflow",
+  "version": "1.0.0",
+  "description": "应用开发全流程团队协作系统（产品设计 → 开发拆单实现 ∥ UI/UX 设计（界面/动效/视觉反馈）→ 联调与体验调优 → QA → BUG修复 → 复盘沉淀）。只要涉及应用项目的新需求/灵感落地、设计文档撰写、任务拆单、UI/UX 与动效设计、功能实现、前后端联调、性能与交互体验调优、测试QA、BUG处理跟踪、项目复盘、经验教训查询沉淀，或需要多 agent 并行开发一个应用功能，就必须使用本 skill。它强制全程留痕（项目根隐藏目录 .appflow/，工具链默认不把它当源码或测试，与代码分离但通过 WS-ID 全链路关联），并把开发与 QA 经验回流到本 skill 供全团队复用。",
+  "author": "DSHPlugin",
+  "type": "skill",
+  "license": "未注明",
+  "whenToUse": "涉及应用项目的新需求/灵感落地、设计文档撰写、任务拆单、UI/动效/视觉反馈设计、功能实现、接入联调、性能与交互体验调优、测试QA、BUG处理跟踪、项目复盘、经验教训沉淀，或需要多 agent 并行开发一个应用功能时。",
+  "invocation": {
+    "modelInvocable": true,
+    "userInvocable": true
+  }
+}
