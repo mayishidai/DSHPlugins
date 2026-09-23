@@ -13,7 +13,7 @@ export const zh = {
   uninstall: '卸载',
   uninstalling: '卸载中...',
   confirmUninstall: '确认卸载',
-  confirmUninstallMsg: '确定要卸载 "{{name}}" 吗？此操作不可撤销。',
+  confirmUninstallMsg: '确定要卸载 "{{name}}" 吗？将从 DSH 的 skills 目录删除，仓库目录不受影响。',
   confirmInstall: '确认安装',
   confirmInstallMsg: '确定要安装 "{{name}}" 吗？将从仓库复制到 skills 目录。',
   uninstallSuccess: '卸载成功',

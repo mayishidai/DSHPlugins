@@ -4,7 +4,8 @@ import type { ReactNode } from 'react'
 
 export interface RepoPlugin {
   name: string
-  repoDirName: string
+  /** 仓库中的目录名；`installed-only`（仓库里已没有）时为 null */
+  repoDirName: string | null
   version: string | null
   /** 插件描述（后端从 manifest.json / SKILL.md / package.json 读出；取不到为 null） */
   description?: string | null
@@ -12,7 +13,14 @@ export interface RepoPlugin {
   installedVersion: string | null
   /** 仓库版本比已装版本新（后端算好的） */
   hasUpdate?: boolean
-  source: 'repo'
+  /**
+   * `repo` = 仓库里有；`installed-only` = **DSH 里装着但仓库里已经没有了**。
+   *
+   * 后者**仍然可以卸载**（后端卸载只依赖 skillsDir + name，与仓库无关）——
+   * 这正是「把 DSH 侧清干净、仓库侧不动」的入口。缺了它，这类技能
+   * 不会出现在列表里，也就永远卸不掉。
+   */
+  source: 'repo' | 'installed-only'
 }
 
 /** 安装/更新接口的返回 */
@@ -451,8 +459,10 @@ export function PluginRepoPanel({
                 </td>
                 <td style={{ padding: '6px', verticalAlign: 'top' }}>
                   <div style={{ fontWeight: 500 }}>{plugin.name}</div>
+                  {/* 副标题：仓库插件显示仓库目录名；孤立已装显示「仓库中已不存在」——
+                      用户必须一眼看出这一行在仓库里已经没有对应物，卸载后无从重装。 */}
                   <div style={{ fontSize: '11px', color: 'var(--dsw-alias-label-tertiary)', lineHeight: 1.4 }}>
-                    {plugin.repoDirName}
+                    {plugin.source === 'installed-only' ? '仓库中已不存在' : plugin.repoDirName}
                   </div>
                 </td>
                 {/* 描述列：长描述截断显示，完整内容放 title 里，鼠标悬停可看全。
@@ -568,7 +578,7 @@ export function PluginRepoPanel({
             </h3>
             <p style={{ margin: '0 0 16px', fontSize: '13px', lineHeight: 1.5 }}>
               {showConfirm.type === 'uninstall'
-                ? `确定要卸载 "${showConfirm.name}" 吗？此操作不可撤销。`
+                ? `确定要卸载 "${showConfirm.name}" 吗？将从 DSH 的 skills 目录删除，仓库目录不受影响。`
                 : showConfirm.type === 'update'
                   ? `确定要更新 "${showConfirm.name}" 吗？将用仓库中的新版本覆盖已装版本，旧版本会留档备份（记录在 version.json 的 previousVersion / backupDir）。`
                   : `确定要安装 "${showConfirm.name}" 吗？将从仓库复制到 skills 目录。`}

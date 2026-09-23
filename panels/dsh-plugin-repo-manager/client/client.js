@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
       uninstall: '卸载',
       uninstalling: '卸载中...',
       confirmUninstall: '确认卸载',
-      confirmUninstallMsg: '确定要卸载 "{{name}}" 吗？此操作不可撤销。',
+      confirmUninstallMsg: '确定要卸载 "{{name}}" 吗？将从 DSH 的 skills 目录删除，仓库目录不受影响。',
       confirmInstall: '确认安装',
       confirmInstallMsg: '确定要安装 "{{name}}" 吗？将从仓库复制到 skills 目录。',
       version: '版本',
@@ -266,7 +266,8 @@ window.__ModuleLoader__.load({
             return jsxRuntime.jsx('tr', {key:plugin.name,style:{borderBottom:'1px solid var(--dsw-alias-border-l3)'}},
               jsxRuntime.jsx('td', {style:{padding:'6px 4px',textAlign:'center'}}, jsxRuntime.jsx('input', {type:'checkbox',checked:selected.has(plugin.name),onChange:function(){toggle(plugin.name);}})),
               jsxRuntime.jsx('td', {style:{padding:'6px',verticalAlign:'top'}},
-                jsxRuntime.jsx('div', {style:{fontWeight:500}}, plugin.name)
+                jsxRuntime.jsx('div', {style:{fontWeight:500}}, plugin.name),
+                jsxRuntime.jsx('div', {style:{fontSize:'11px',color:'var(--dsw-alias-label-tertiary)',lineHeight:1.4}}, plugin.source==='installed-only' ? '仓库中已不存在' : plugin.repoDirName)
               ),
               // 描述列：两行截断 + title 悬停看全文（与 React 源同款行为）
               jsxRuntime.jsx('td', {style:{padding:'6px',verticalAlign:'top'}},

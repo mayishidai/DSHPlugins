@@ -27,6 +27,8 @@
     并有反向回归 `test-skill-parity-negatives.py` 证明该守卫不会空转
 - **dsh-plugin-repo-manager**（面板） - 主界面侧边栏图标按钮 + 设置面板 tab 里的「我的插件仓库」
   - 侧边栏按钮入口 / Skill 列表展示 / 安装卸载（带确认）/ 批量操作 / 轮询刷新（默认 3 秒）
+  - **清理 DSH 孤立技能**：列出「DSH 里装着、仓库中已不存在」的技能（标为「仓库中已不存在」）
+    并可直接卸载 —— 只删 DSH 侧，仓库永远只读
 - **lucky-api**（技能） - 调用自建 Lucky 实例的 HTTP API
   - 零依赖（Python stdlib），`check / get / post / put` 统一入口
   - 鉴权走 `Lucky-Admin-Token`，成败判 `ret` 而非 HTTP 状态码
@@ -239,6 +241,7 @@ DSHPlugins/
 | 侧边栏按钮 | ✅ | 注册到 sidebar 槽 |
 | Skill 列表 | ✅ | 从仓库目录读取 |
 | 安装/卸载 | ✅ | 带确认对话框 |
+| 清理 DSH 孤立技能 | ✅ | 列出「DSH 里装着但仓库中已不存在」的技能，可直接卸载（**只删 DSH 侧，仓库不受影响**） |
 | 版本检测 | ✅ | 仓库版本 vs 已装版本，标出「可更新」 |
 | 一键更新 | ✅ | 单个更新 / 「⬆ 全部更新」批量串行 |
 | 更新留档 | ✅ | 更新前整目录备份 + 记录 `previousVersion`/`backupDir` |

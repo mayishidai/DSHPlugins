@@ -168,6 +168,19 @@ for (const [label, needle] of [
   check(label, clientJs.includes(needle), needle)
 }
 
+console.log('\n[10. 孤立已装技能：必须看得见（否则永远卸不掉）]')
+// 起因：后端 listPlugins 原先**只遍历 repoDir**，于是「仓库里删掉、DSH 里还在」
+// 的技能不出现在列表里 —— 面板上看着干净了，DSH 的 skills/ 里那份纹丝不动，
+// 而且没有卸载入口（卸载按钮只存在于列表行内）。用户原话：
+// 「面板可以移除，但是并没有真实从DSH中移除」。
+// 后端已补上这类条目；前端两份都必须**真的区分渲染**它（只在类型里声明不算）。
+bothHave('声明了 installed-only 这个来源', /installed-only/)
+bothHave('渲染时按 source 分支', /source\s*===\s*'installed-only'/)
+bothHave('给孤立条目标出「仓库中已不存在」', /仓库中已不存在|repoGone/)
+bothHave('孤立条目的副标题回落到 repoDirName（为 null 时不显示路径）', /repoDirName/)
+check('bundle（产物）里也标了孤立条目', /仓库中已不存在/.test(clientJs))
+check('产物渲染了 plugin.repoDirName', /plugin\.repoDirName/.test(clientJs))
+
 console.log(`\n结果: ${pass} 通过 / ${fail} 失败 / 共 ${pass + fail} 例`)
 if (fail > 0) {
   console.log('\n两份实现已经漂移。请同步修改：')

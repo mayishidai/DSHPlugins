@@ -8,6 +8,8 @@ DSH 插件：从**主界面侧边栏**或设置面板管理自定义插件仓库
 - 查看插件仓库中的所有插件
 - 显示已安装/未安装状态
 - 一键安装 / 一键卸载已安装插件（带确认对话框）
+- **列出「DSH 里装着、仓库中已不存在」的技能**（副标题标为「仓库中已不存在」）——
+  这类技能以前完全不出现，导致「仓库里删掉了，DSH 里那份却永远卸不掉」（见下方排查第 3 条）
 - **版本检测**：对比仓库版本与已装版本，标出「可更新」
 - **一键更新**：单个更新或「⬆ 全部更新」批量串行更新
 - **更新留档**：更新前自动整目录备份为 `<插件名>.bak-<ISO时间戳>`，并在 `version.json` 记录 `previousVersion` / `updatedAt` / `backupDir`
@@ -165,6 +167,38 @@ skillsDir: '/vol2/@appdata/deepseek.harness/dsh-data/skills'
 > `panels/*/cordis.patch.yml`，一旦发现 `skillsDir` 写死成 `~` 开头就 FAIL。
 > 插件内守卫：`scripts/test-skills-dir.mjs`（解析优先级 + 兜底判据 + 告警逻辑），
 > `scripts/test-api-e2e.mjs` 第 [9] 节（端到端证明告警真的会传到面板）。
+
+### 面板里找不到某个已装技能（2026-09-23 已修）
+
+**症状**：从仓库里删掉一个技能后，DSH 侧那份**还在**（技能照样生效），
+但面板列表里**根本看不到它** —— 因此也没有卸载入口。用户原话：
+「**面板可以移除，但是并没有真实从 DSH 中移除**」。
+
+**根因**（注意与上一条不同：上一条是"写到哪"，这条是"读哪"）：
+`listPlugins` **只遍历 `repoDir`**，`skillsDir` 扫出来的那批名字仅仅被用来
+给仓库条目「打已装标记」。于是 `skillsDir − repoDir` 这个**差集被整段丢弃**：
+
+| 操作 | 实际发生的事 | 你看到的现象 |
+|---|---|---|
+| 从仓库删技能 | `skillsDir/<name>` 没被任何人碰 | 面板列表里它消失了（以为卸掉了） |
+| 想卸载它 | 列表里没有这一行 → 没有卸载按钮 | 「面板里没有，只能上机器手动删」 |
+
+**修复**：`listPlugins` 把差集补成列表项（`source: 'installed-only'`、
+`repoDirName: null`、副标题显示「仓库中已不存在」）。
+**卸载路径本来就不依赖仓库**（只删 `skillsDir/<name>`），所以补上列表即可复用 ——
+不需要新增后端接口，也不需要改卸载逻辑。
+
+约定：
+
+- **只动 DSH 侧**：卸载只删 `skillsDir/<name>`，`repoDir` 永远只读。
+- **不谎报可更新**：没有仓库版本可比时 `hasUpdate` 恒为 `false`，版本列显示已装版本。
+- **不编造描述**：描述从 DSH 侧那份自己读（`manifest.json` → `SKILL.md` → `package.json`）。
+- **边界**：非 kebab-case 的目录（如更新残留的 `<名>.bak-<时间戳>`）**不会**被列成
+  可卸载技能 —— 否则「卸载」按钮会指向一份备份目录。
+
+> 守卫：`scripts/test-orphans.mjs`（可见性 + 卸载后仓库逐字节未变 + 备份目录排除 +
+> 仓库目录不存在时仍能清理 DSH）；`scripts/test-client-parity.mjs` 第 [10] 节
+> （前端两份实现都必须真的**区分渲染**这类条目，只在类型里声明不算）。
 
 ## 版本与更新机制
 
@@ -414,7 +448,7 @@ npm run typecheck
 # 编译（服务端 → dist/，客户端 → client/client.js）
 npm run build
 
-# 测试（23+24+14+35+31+25+36+22+23 = 233 例 / 九套）
+# 测试（23+24+14+35+37+25+36+22+23+24 = 263 例 / 十套）
 npm test
 ```
 
@@ -425,3 +459,13 @@ npm test
 > **注意 3**：仓库级校验里还有一条 **`scripts/tests/test-profile-resolve.sh`（25 例）**，
 > 管的是「装到哪个 profile」——profile 目录必须运行时探测，不得写死（见上文「安装」）。
 > 它测的是仓库根的解析库，不属于本插件的 `npm test`，由 `make verify` 第 5 步跑。
+>
+> **注意 4**：新增测试文件后记得补进 `package.json` 的 `test` 脚本 ——
+> 漏了**不会报错**，只是那套测试永远不跑（看着全绿）。同时新 `.mjs` 必须
+> `git add --chmod=+x`：`validate_repo.py` 的可执行位判据查的是 **git 索引**。
+>
+> **注意 5**：测试里**动态 import 产物必须用 `pathToFileURL(...).href`**。
+> Windows 上 `await import('C:/.../dist/index.js')` 会抛
+> `ERR_UNSUPPORTED_ESM_URL_SCHEME: Received protocol 'c:'`（默认 ESM loader 只认
+> `file` / `data` / `node` 三种 scheme），而 Linux/NAS 上照样能跑 —— 属于
+> 「本机绿、目标机炸」或反过来的那一类。相对 specifier（`import('../dist/index.js')`）没这个问题。

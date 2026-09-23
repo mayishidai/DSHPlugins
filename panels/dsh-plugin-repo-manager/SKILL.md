@@ -1,7 +1,7 @@
 ---
 name: dsh-plugin-repo-manager
-description: "DSH 面板插件：从主界面侧边栏图标或设置面板浏览/安装/卸载/更新自建插件仓库（DSHPlugins）中的插件，支持版本检测与一键更新。"
-whenToUse: "当需要在 DSH 主界面侧边栏或设置面板里管理自建插件仓库、或排查插件安装/更新问题时。"
+description: "DSH web 面板插件：在设置页管理自建插件仓库，支持扫描、安装、卸载、版本检测与一键更新（更新前自动留档备份）；并列出「DSH 里装着但仓库中已不存在」的技能，让 DSH 侧也能被清理干净。"
+whenToUse: "当需要在 DSH 设置面板中浏览/安装/更新自建插件仓库（DSHPlugins）里的插件时；或需要清理 DSH 里已从仓库移除的技能时。"
 invocation:
   modelInvocable: false
   userInvocable: true
@@ -9,7 +9,8 @@ invocation:
 
 # dsh-plugin-repo-manager（面板插件）
 
-在 DSH 设置页以面板形式管理自建插件仓库：扫描仓库目录、安装/卸载插件、检测版本更新并一键更新。
+在 DSH 设置页以面板形式管理自建插件仓库：扫描仓库目录、安装/卸载插件、检测版本更新并一键更新；
+并列出「DSH 里装着但仓库中已不存在」的技能，让 DSH 侧也能被清理干净。
 
 ## 这是面板型插件（不是技能）
 

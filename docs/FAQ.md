@@ -101,8 +101,15 @@ DSH 只接受 kebab-case 技能名：`^[a-z0-9]+(?:-[a-z0-9]+)*$`。请改名，
 `make uninstall NAME=<name>` 只删 `$DSH_HOME/skills/<name>/`，不影响其它插件。
 面板走 `make uninstall-panel`，它只动 profile 的 `package.json` 与 `node_modules`，并可完整还原。
 
-注意：**在仓库里删掉一个技能，不会自动从 DSH 里清掉它**——需要手工跑一次
-`make uninstall NAME=<name>`，否则那份副本会一直留在 `$DSH_HOME/skills/` 里。
+注意：**在仓库里删掉一个技能，不会自动从 DSH 里清掉它**。二选一：
+
+- **面板**（推荐）：设置 → 插件 → 「我的插件仓库」。那一条会以「仓库中已不存在」标出，
+  点「卸载」即可（也可勾选后批量卸载）。**只删 `$DSH_HOME/skills/<name>`，仓库不受影响。**
+- **命令行**：`make uninstall NAME=<name>`。
+
+否则那份副本会一直留在 `$DSH_HOME/skills/` 里 —— 而且**技能照样生效**，
+因为 DSH 扫的就是那个目录。（面板在 2026-09-23 之前**看不到**这类技能，
+列表只列仓库里有的，所以那时只能上机器手删。）
 
 ## Q6: `registry/manifest.json` 有什么用？
 它汇总整仓插件目录，可托管到静态服务器，供远程商店/自动更新使用。

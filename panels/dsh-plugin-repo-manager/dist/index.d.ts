@@ -92,18 +92,40 @@ export declare function isInsideDir(base: string, target: string): boolean;
  */
 export declare function getPluginDescription(pluginDir: string): string | null;
 /**
- * 列出仓库中的插件
+ * 仓库列表的一行。
+ *
+ * `source` 分两类，这是「把 DSH 侧清干净、仓库侧不动」的关键：
+ *   - `repo`           —— 仓库里有，`repoDirName` 即仓库中的目录名
+ *   - `installed-only` —— **DSH 里装着，但仓库里已经没有了**（`repoDirName: null`）
  */
-export declare function listPlugins(repoDir: string, skillsDir: string): Array<{
+export interface RepoPluginEntry {
     name: string;
-    repoDirName: string;
+    /** 仓库中的目录名；`installed-only` 时为 null */
+    repoDirName: string | null;
     version: string | null;
     description: string | null;
     installed: boolean;
     installedVersion: string | null;
     hasUpdate: boolean;
-    source: 'repo';
-}>;
+    source: 'repo' | 'installed-only';
+}
+/**
+ * 列出插件：仓库里的 + **DSH 里装着但仓库已没有的**。
+ *
+ * ## ⚠️ 第二类必须有，不要退回「只遍历 repoDir」
+ *
+ * 早先这里**只遍历 `repoDir`**，`installedNames` 仅被用来给仓库条目"打已装标记"。
+ * 后果：仓库里删掉、DSH 里还留着的技能**根本不出现在列表里** —— 面板上看着
+ * 已经干净了，而 DSH 的 `skills/` 里那份纹丝不动，**既看不见也没有卸载入口**
+ * （卸载按钮只存在于列表行内）。用户感受是「面板可以移除，但并没有真实从 DSH 中移除」。
+ *
+ * 修法只是把 `installedNames` 里仓库中不存在的那部分补成列表项：
+ * **卸载路径本来就只依赖 `skillsDir + name`（与仓库无关）**，补上列表即可直接复用。
+ *
+ * 教训（可迁移）：凡是「收集了一组数据却只用于判存在」的地方，都要追问一句
+ * 「这组数据的另一侧去哪了」—— 一半被丢弃时不会报错，只会有一类东西永远看不见。
+ */
+export declare function listPlugins(repoDir: string, skillsDir: string): RepoPluginEntry[];
 /**
  * 语义化版本比较：latest 是否比 current 新。
  * 缺任一版本、或版本号无法解析时返回 false（不确定就不提示更新）。

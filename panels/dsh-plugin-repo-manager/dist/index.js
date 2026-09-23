@@ -380,7 +380,20 @@ export function getPluginDescription(pluginDir) {
     return null;
 }
 /**
- * 列出仓库中的插件
+ * 列出插件：仓库里的 + **DSH 里装着但仓库已没有的**。
+ *
+ * ## ⚠️ 第二类必须有，不要退回「只遍历 repoDir」
+ *
+ * 早先这里**只遍历 `repoDir`**，`installedNames` 仅被用来给仓库条目"打已装标记"。
+ * 后果：仓库里删掉、DSH 里还留着的技能**根本不出现在列表里** —— 面板上看着
+ * 已经干净了，而 DSH 的 `skills/` 里那份纹丝不动，**既看不见也没有卸载入口**
+ * （卸载按钮只存在于列表行内）。用户感受是「面板可以移除，但并没有真实从 DSH 中移除」。
+ *
+ * 修法只是把 `installedNames` 里仓库中不存在的那部分补成列表项：
+ * **卸载路径本来就只依赖 `skillsDir + name`（与仓库无关）**，补上列表即可直接复用。
+ *
+ * 教训（可迁移）：凡是「收集了一组数据却只用于判存在」的地方，都要追问一句
+ * 「这组数据的另一侧去哪了」—— 一半被丢弃时不会报错，只会有一类东西永远看不见。
  */
 export function listPlugins(repoDir, skillsDir) {
     const installedNames = new Set();
@@ -391,28 +404,47 @@ export function listPlugins(repoDir, skillsDir) {
         }
     }
     const plugins = [];
-    if (!existsSync(repoDir))
-        return plugins;
-    for (const dirName of readdirSync(repoDir)) {
-        const pluginDir = join(repoDir, dirName);
-        if (!existsSync(pluginDir) || readdirSync(pluginDir).length === 0)
-            continue;
-        // 识别为插件的依据：SKILL.md（技能型）/ manifest.json / package.json（面板型）
-        const markers = ['SKILL.md', 'manifest.json', 'package.json'];
-        if (!markers.some(f => existsSync(join(pluginDir, f))))
-            continue;
-        const version = getPluginVersion(pluginDir);
-        const isInstalled = installedNames.has(dirName);
-        const installedVersion = isInstalled ? getInstalledVersion(skillsDir, dirName) : null;
+    const repoNames = new Set();
+    if (existsSync(repoDir)) {
+        for (const dirName of readdirSync(repoDir)) {
+            const pluginDir = join(repoDir, dirName);
+            if (!existsSync(pluginDir) || readdirSync(pluginDir).length === 0)
+                continue;
+            // 识别为插件的依据：SKILL.md（技能型）/ manifest.json / package.json（面板型）
+            const markers = ['SKILL.md', 'manifest.json', 'package.json'];
+            if (!markers.some(f => existsSync(join(pluginDir, f))))
+                continue;
+            repoNames.add(dirName);
+            const version = getPluginVersion(pluginDir);
+            const isInstalled = installedNames.has(dirName);
+            const installedVersion = isInstalled ? getInstalledVersion(skillsDir, dirName) : null;
+            plugins.push({
+                name: dirName,
+                repoDirName: dirName,
+                version,
+                description: getPluginDescription(pluginDir),
+                installed: isInstalled,
+                installedVersion,
+                hasUpdate: isInstalled && isNewer(version, installedVersion),
+                source: 'repo',
+            });
+        }
+    }
+    // 「DSH 里装着、仓库里已没有」的补进来（否则无法卸载，见上方说明）。
+    // 排在仓库插件之后、按名字排序 —— 轮询每几秒重拉一次，顺序必须稳定。
+    const orphans = [...installedNames].filter(n => !repoNames.has(n)).sort();
+    for (const name of orphans) {
+        const installedVersion = getInstalledVersion(skillsDir, name);
         plugins.push({
-            name: dirName,
-            repoDirName: dirName,
-            version,
-            description: getPluginDescription(pluginDir),
-            installed: isInstalled,
-            installedVersion: installedVersion ?? undefined,
-            hasUpdate: isInstalled && isNewer(version, installedVersion),
-            source: 'repo',
+            name,
+            repoDirName: null,
+            // 没有仓库版本可比 → 版本列直接显示已装版本，hasUpdate 恒为 false
+            version: installedVersion,
+            description: getPluginDescription(join(skillsDir, name)),
+            installed: true,
+            installedVersion,
+            hasUpdate: false,
+            source: 'installed-only',
         });
     }
     return plugins;
