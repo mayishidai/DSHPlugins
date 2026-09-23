@@ -16,8 +16,11 @@
 | 许可证 | **包内未附 LICENSE 文件**。原样收录，不修改；无上游声明可归档，此处如实记录该缺口。 |
 | 完整性 | 下载后 `unzip -t` 通过，38 个条目无损坏；无路径穿越（`/` 开头或含 `..`）条目 |
 
-> 与 `docs/upstream/` 下另两个上游（Cloudflare 官方 Apache-2.0、xiaoyuboi MIT）**无关**，
-> 各自独立。
+> 与 `docs/upstream/` 下的另一上游（`cloudflare-tunnel-skill`，个人仓库 xiaoyuboi，MIT）
+> **无关**，各自独立。
+>
+> 曾同在本目录下的 `cloudflare-skills/`（Cloudflare 官方 Apache-2.0，14 个技能）已于
+> 2026-09-23 随技能本体一并移出仓库 —— 目前 `docs/upstream/` 只有两个上游。
 
 ## 这个技能能做什么
 

@@ -17,8 +17,14 @@
 
 上游 LICENSE 与中英文 README 原样保留在本目录，以满足 MIT 的署名与声明保留要求。
 
-> **注意区分**：这与 `docs/upstream/cloudflare-skills/`（Cloudflare **官方**仓库，Apache-2.0）
-> 是**两个不同的上游**。本技能虽是"Cloudflare Tunnel"主题，但代码由个人维护，不要混淆许可证。
+> **注意区分**：本目录的 `cloudflare-tunnel` 与 Cloudflare **官方**的
+> [`cloudflare/skills`](https://github.com/cloudflare/skills)（Apache-2.0）**是两个不同的上游**。
+> 本技能虽以 "Cloudflare Tunnel" 为主题，但代码由个人维护，许可证是 MIT，**不要混淆**。
+>
+> 顺带记录：官方那 14 个技能（`cloudflare` 路由层 + Workers / Durable Objects /
+> Agents SDK / Wrangler 等）曾整目录收录在 `skills/` 下，已于 **2026-09-23** 全部移出
+> （连同 `docs/upstream/cloudflare-skills/`）。本技能是**独立第三方上游**、不是官方技能的
+> 子集，故**保留**。
 
 ## 这个技能能做什么
 

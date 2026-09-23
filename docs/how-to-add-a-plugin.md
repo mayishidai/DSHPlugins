@@ -43,7 +43,7 @@ git add skills/<你的技能名> && git commit -m "新增技能 <你的技能名
 
 ### 收录外部技能时
 
-若从上游仓库整目录引入（如 `cloudflare/skills`），**必须平铺在 `skills/` 下**，
+若从上游仓库整目录引入（如 `xiaoyuboi/cloudflare-tunnel-skill`），**必须平铺在 `skills/` 下**，
 不能套一层父目录 —— 套了就扫描不到。同时：
 
 1. **先做安全审计**（第三方代码必做，包括个人仓库）。按 `skills安全审计` 的 11 步过一遍：
@@ -55,7 +55,8 @@ git add skills/<你的技能名> && git commit -m "新增技能 <你的技能名
 2. 目录名取 `SKILL.md` 的 `name`，**不一定是上游目录名**（例：上游目录叫
    `cloudflare-tunnel-skill`，但 `name` 是 `cloudflare-tunnel`，本仓库取后者）。
 3. 保留上游 LICENSE，放到 `docs/upstream/<来源>/`（连同上游 README）。
-4. **登记上游**——在 `scripts/gen-manifest.py` 里补两处，否则会套用错许可证：
+4. **登记上游**——在 `scripts/gen-manifest.py` 里补两处。该脚本**没有默认兜底**，
+   缺任一处都会在生成时被拒绝（退出码 2），不会静默套用别人的许可证：
 
    ```python
    PROVENANCE["<上游标识>"] = {"author": ..., "source": ..., "license": ..., "version": ...}
@@ -90,8 +91,7 @@ unzip -q temp/<name>.zip -d temp/<name>-extract
 - **自升级 / 自动执行入口**：确认它是"只读比对"还是"自动拉取并替换自己"。
   前者可原样保留并写进 SOURCE.md；后者**必须先报告用户**再决定是否收录。
 
-参考实现（三个不同上游，许可证与改动程度都不同）：
-- `docs/upstream/cloudflare-skills/SOURCE.md` —— Apache-2.0，整目录原样引入
+参考实现（两个不同上游，许可证与改动程度都不同）：
 - `docs/upstream/cloudflare-tunnel-skill/SOURCE.md` —— MIT，一处路径改写 + 完整审计结论
 - `docs/upstream/jdgold/SOURCE.md` —— zip 分发包，无附许可证，含凭据豁免说明
 
@@ -214,7 +214,10 @@ export default { name, apply }   // ← 互操作兜底
 - [ ] 引入外部技能：**安全审计已做并定级**（P0 一票否决）
 - [ ] 引入外部技能：上游 LICENSE 已放 `docs/upstream/<来源>/`，且写了 `SOURCE.md`
 - [ ] 引入外部技能：新上游已在 `gen-manifest.py` 的 `PROVENANCE` + `SKILL_PROVENANCE`
-      两处登记（漏登记会套用错许可证）
+      两处登记。**只登记一处会被拒绝**（退出码 2）—— 该脚本已无 `DEFAULT_PROVENANCE`
+      兜底，历史上那句兜底正是"漏登记→静默套上 Cloudflare 的 author/source/Apache-2.0"
+      的成因。登记完跑 `python3 scripts/gen-manifest.py <仓库根> --list` 复核：
+      未登记的技能会被单独列成一行，不会混进任何上游分组
 - [ ] 引入外部技能：上游文档里的**异宿主路径**（`~/.claude/skills/` 等）已改写为
       `SKILL_DIR` 目标中立写法，且该改动已记入 `SOURCE.md`
 - [ ] 引入 zip 分发包：解压前 `unzip -t` 验过完整性，且确认无路径穿越 / 符号链接条目

@@ -459,7 +459,7 @@ def check_local_skills() -> None:
     else:
         bad(
             "自研登记不一致 —— "
-            f"漏登记（无 source 但不在 LOCAL_SKILLS，会被静默套上 Cloudflare 许可证）: {sorted(on_disk - listed)}；"
+            f"漏登记（无 source 但不在 LOCAL_SKILLS，gen-manifest.py 会把它当第三方）：{sorted(on_disk - listed)}；"
             f"多登记（在 LOCAL_SKILLS 但 manifest 有 source）: {sorted(listed - on_disk)}"
         )
 
