@@ -8,7 +8,7 @@
 DSHPlugin/
 ├── skills/   技能型能力（SKILL.md）      → 复制到 $DSH_HOME/skills/
 ├── agents/   智能体 / 专家角色           → 按目标框架的 agent 机制加载
-├── mcps/     MCP 服务配置（不含凭据）    → 合并进 ~/.workbuddy/mcp.json
+├── mcps/     MCP 服务配置（不含凭据）    → 由客户端读取，落点**运行时探测**
 └── panels/   运行时面板插件（双半包）    → 复制到 profile/node_modules/<包名>/
 ```
 
@@ -29,7 +29,7 @@ DSH（DeepSeek Harness）没有传统意义的「插件商店」，它用一套 
 |---|---|---|---|
 | `skills/` | 技能型（有 SKILL.md） | `ctx.skills`（skill 注册表）+ `dsh-skill-filesystem` 提供方 | `$DSH_HOME/skills/<name>/` |
 | `agents/` | 智能体 / 专家角色 | 目标框架的 agent / expert 机制 | 视框架而定 |
-| `mcps/` | MCP 服务配置 | MCP server（`~/.workbuddy/mcp.json`） | 配置合并 + 手动信任 |
+| `mcps/` | MCP 服务配置 | MCP server（落点由脚本**运行时探测**，非固定路径） | 配置合并 + 手动信任 |
 | `panels/` | 运行时型（面板/UI） | extensions（Cordis 双半包，host + client） | 随 extensions 工具加载 |
 
 ## 2. DSH 如何发现技能

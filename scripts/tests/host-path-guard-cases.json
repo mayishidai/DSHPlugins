@@ -1,0 +1,52 @@
+{
+  "_comment": [
+    "宿主路径守卫（validate_repo.py 2.10）反面回归的**样例数据**。",
+    "",
+    "为什么单独放一个数据文件、而不是写在 test-host-path-guard.py 里：",
+    "守卫会扫描全仓库的 .sh / .py，判据是「默认值形态」。测试若把这些坏写法",
+    "作为**字符串字面量**写在 .py 里，守卫就会抓到测试文件自己 —— 而唯一的",
+    "绕开办法是给 scripts/tests/ 开豁免，那就等于新增一块盲区。",
+    "把样例降级成「数据」（.json 不在扫描后缀里）既保住守卫的全量覆盖，",
+    "也让样例矩阵变成声明式的。同类先例：scripts/tests/cred_parity_corpus.txt。",
+    "",
+    "每个 payload 都是**要写进夹具的文件全文**；*_line 结尾的是单行片段，",
+    "供测试自行拼装（例如垫 40 行注释来验证行号可定位）。"
+  ],
+  "payloads": {
+    "shell_profile_abs": "#!/usr/bin/env bash\nPROFILE_DIR=\"${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}\"\n",
+    "shell_mcp_home": "#!/usr/bin/env bash\nMCP_CONFIG=\"${MCP_CONFIG:-$HOME/.workbuddy/mcp.json}\"\n",
+    "shell_dsh_home_tilde": "#!/usr/bin/env bash\nDSH_HOME=\"${DSH_HOME:-~/.dsh}\"\n",
+    "py_default_config": "\"\"\"sample\"\"\"\nDEFAULT_CONFIG = Path.home() / \".workbuddy\" / \"mcp.json\"\n",
+    "py_get_dsh_home": "\"\"\"sample\"\"\"\nimport os\nDSH_HOME = os.environ.get(\"DSH_HOME\", os.path.expanduser(\"~/dsh\"))\n",
+
+    "shell_comment_counterexample": "#!/usr/bin/env bash\n# 曾经错在：MCP_CONFIG=\"${MCP_CONFIG:-$HOME/.workbuddy/mcp.json}\"\necho hi\n",
+    "py_docstring_counterexample": "\"\"\"曾经错在：DEFAULT_CONFIG = Path.home() / \".workbuddy\" / \"mcp.json\"\n\"\"\"\nX = 1\n",
+
+    "shell_allowed_forms": "#!/usr/bin/env bash\nA=\"${MCP_CONFIG:-}\"\nB=\"${DSH_HOME:-}\"\nC=\"${TMPDIR:-${TEMP:-/tmp}}/x.log\"\nD=\"${DSH_PROFILE_SEARCH_ROOT-/vol1 /vol2 /volume1}\"\nE=\"${SELFHEAL_LOG:-}\"\n",
+    "py_allowed_forms": "\"\"\"sample\"\"\"\ndef add(x):\n    return str(Path(\"~\") / \".workbuddy\" / \"mcp.json\")\nCACHE_DIR = Path.home() / \".openclaw\" / \"cache\"\nUSER_SKILLS = Path.home() / \".workbuddy\" / \"skills\"\n",
+
+    "shell_known_exempt": "#!/usr/bin/env bash\nDSH_HOME=\"${DSH_HOME:-$HOME/.dsh}\"\n",
+    "shell_known_exempt_plus_new": "#!/usr/bin/env bash\nDSH_HOME=\"${DSH_HOME:-$HOME/.dsh}\"\nMCP_CONFIG=\"${MCP_CONFIG:-$HOME/.workbuddy/mcp.json}\"\n",
+
+    "shell_git_violation": "#!/usr/bin/env bash\nMCP_CONFIG=\"${MCP_CONFIG:-$HOME/x/mcp.json}\"\n",
+    "py_violation": "DEFAULT_CONFIG = Path.home() / \".workbuddy\" / \"mcp.json\"\n",
+
+    "shell_mcp_home_line": "MCP_CONFIG=\"${MCP_CONFIG:-$HOME/.workbuddy/mcp.json}\"\n",
+    "shell_profile_abs_line": "PROFILE_DIR=\"${PROFILE_DIR:-/vol2/@appdata/deepseek.harness/dsh-data/profiles/web}\"\n",
+    "shell_clean": "#!/usr/bin/env bash\nset -u\necho hi\n",
+    "py_clean": "\"\"\"sample\"\"\"\nX = 1\n"
+  },
+  "must_catch": [
+    {"name": "形态① shell profile 绝对路径默认值", "file": "scripts/sample.sh", "payload": "shell_profile_abs"},
+    {"name": "形态② shell 家目录默认值（2026-09-23 事故本体）", "file": "scripts/sample.sh", "payload": "shell_mcp_home"},
+    {"name": "形态②b shell `~` 默认值", "file": "scripts/sample.sh", "payload": "shell_dsh_home_tilde"},
+    {"name": "形态③ py 模块级常量（2026-09-23 事故本体）", "file": "scripts/sample.py", "payload": "py_default_config"},
+    {"name": "形态③b py `.get` 默认值", "file": "scripts/sample.py", "payload": "py_get_dsh_home"}
+  ],
+  "must_pass": [
+    {"name": "shell 注释里的反面教材不算违规", "file": "scripts/sample.sh", "payload": "shell_comment_counterexample"},
+    {"name": "py docstring 里的反面教材不算违规", "file": "scripts/sample.py", "payload": "py_docstring_counterexample"},
+    {"name": "空回退 / 搜索集 / 函数内候选 / 名字不命中 全部放行（shell）", "file": "scripts/sample.sh", "payload": "shell_allowed_forms"},
+    {"name": "空回退 / 搜索集 / 函数内候选 / 名字不命中 全部放行（py）", "file": "scripts/sample.py", "payload": "py_allowed_forms"}
+  ]
+}

@@ -23,10 +23,11 @@ skills/<name>/
 - kebab-case：`^[a-z0-9]+(?:-[a-z0-9]+)*$`（不能有中文、大写、下划线）
 - **必须平铺**：`skills/<name>/` 只允许一层。套了父目录（如 `skills/vendor/<name>/`）
   DSH 就扫不到 —— 扫描器按 `skills/*/SKILL.md` 匹配。
-- 自校验：**一条命令跑全套** —— `make verify`（共七步：结构校验 / 安装前自检 /
-  凭据一致性回归 / 面板可加载性 / profile 落点探测 / 镜像技能对齐 / 对齐守卫反向回归。
-  明细见 [`docs/how-to-add-a-plugin.md`](../docs/how-to-add-a-plugin.md) 的校验清单）。
-  本文件**不复述步骤清单** —— 曾复述过一版「四套」，随守卫增加到七步而漂移成错的。
+- 自校验：**一条命令跑全套** —— `make verify`。步骤清单见 `Makefile` 的 `verify`
+  目标与 [`docs/how-to-add-a-plugin.md`](../docs/how-to-add-a-plugin.md) 的校验清单。
+  ⚠️ 本文件**不复述步骤清单**，也不写步数。曾复述过一版「四套」，后来守卫增加到
+  七步，复述的那份就漂移成错的了；再后来写着「共七步」也没撑过一轮（又加到八步）。
+  复述一遍 = 又多一处必然过期的副本。
 
   > 其中一步是**一致性守卫**。凭据粗筛在 Python 与 Bash 里各有一份实现，
   > 曾因 Bash 版缺 `-i`（且关键字不允许前缀）而漏判 jdgold 的 API Key，

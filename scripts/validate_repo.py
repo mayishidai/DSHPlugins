@@ -146,10 +146,33 @@ def _strip_sh_comments(src: str) -> str:
     `scripts/lib/resolve-profile.sh` 都写着一行
         #   PROFILE_DIR="${PROFILE_DIR:-/vol2/@appdata/.../profiles/web}"
     来说明「曾经错在哪里」。不剔除，检查会把自己的说明文字判成违规。
+
+    ⚠️ 注释行**置空而不是删除**（保持行号不变）。删行会让 `splitlines()` 的下标
+    与真实文件错位，于是检查报出的行号是**剔注释后的行号** —— 拿着它去文件里
+    找，找到的是别的行。报错给不出可用位置，等于让人自己再数一遍。
     """
     return "\n".join(
-        line for line in src.splitlines() if not line.lstrip().startswith("#")
+        "" if line.lstrip().startswith("#") else line
+        for line in src.splitlines()
     )
+
+
+def _strip_py_comments(src: str) -> str:
+    """剔除 Python 的注释与三引号块，便于「只看真实代码」地做特征检查。
+
+    与 `_strip_sh_comments` 同一理由，且这里**光剔注释还不够**：本仓库的反面教材
+    常常写在 **docstring** 里。例如
+    `mcps/hindsight/scripts/hindsight_paths.py` 的模块 docstring 就写着
+        DEFAULT_CONFIG = Path.home() / ".workbuddy" / "mcp.json"
+    来说明「2026-09-23 之前错在哪里」—— 只剔 `#` 注释会把它自己判成违规。
+
+    ⚠️ 三引号块用**等量换行**替换，同样是为了保住行号。
+    ⚠️ 这里不处理字符串里恰好出现三引号、以及 raw/前缀字符串等边角情况：判据
+    只需**足够好**。宁可漏报也不误报 —— 误报会逼人放宽规则，那等于取消守卫。
+    """
+    src = re.sub(r'"""[\s\S]*?"""', lambda m: "\n" * m.group(0).count("\n"), src)
+    src = re.sub(r"'''[\s\S]*?'''", lambda m: "\n" * m.group(0).count("\n"), src)
+    return _strip_sh_comments(src)
 
 
 def check_panel_esm_safety(repo: Path) -> None:
@@ -262,6 +285,75 @@ HARDCODED_HOST_PATH_RE = re.compile(
     r"\$\{[A-Za-z_]*[Pp][Rr][Oo][Ff][Ii][Ll][Ee][A-Za-z_]*:-/"
 )
 
+# ---------------------------------------------------------------------------
+# 「写死宿主路径」的第 2 类形态：**变量默认值回退到家目录 / 数据卷根**
+#
+# 第 1 类（上面那条 HARDCODED_HOST_PATH_RE）只认 `${...profile...:-/绝对路径}`，
+# 于是 2026-09-23 的另一处失明：
+#     mcps/hindsight/scripts/apply_to_config.py
+#         DEFAULT_CONFIG = Path.home() / ".workbuddy" / "mcp.json"
+#     mcps/hindsight/scripts/selfheal.sh
+#         MCP_CONFIG="${MCP_CONFIG:-$HOME/.workbuddy/mcp.json}"
+# ① 回退值是 `$HOME` 而不是 `/` → 正则不匹配；② `.py` 根本不在扫描范围。
+# 结果同一个病（把「某台机器观察到的事实」当成普适默认值）原地复发，照旧不报错。
+#
+# ## 为什么判据不做成「扫路径字面量」
+#
+# 实测扫 `~/.workbuddy` / `~/.dsh` 这类字面量会命中一堆**正当**用法：
+#   · 帮助文本（`description="同步到 ~/.workbuddy/skills/"`）
+#   · 测试夹具（`$FAKE_HOME/.dsh/profiles/web`）
+#   · 工具链路径（`$HOME/.workbuddy/binaries/python/...`）
+#   · 仓库自己约定的每用户配置文件（`~/.<name>_config.json`，见 mcps/README.md）
+# 噪声会逼人放宽规则 —— 那等于取消守卫。**所以只认「默认值形态」**，
+# 且要求**变量名命中宿主数据根语义**（下面这个名单），宁可漏报也不误报。
+# 命中这些「名字形态」才算宿主数据根相关的默认值。名单是**故意的**：
+#
+#   DSH_[A-Z_]*            DSH_HOME / DSH_RUNTIME / DSH_DATA / DSH_PROFILE_SEARCH_ROOT
+#   [A-Z_]*PROFILE[A-Z_]*  PROFILE_DIR / DSH_PROFILE_SEARCH_ROOT
+#   [A-Z_]*CONFIG[A-Z_]*   MCP_CONFIG / DEFAULT_CONFIG / CONFIG_PATH
+#   SKILLS_DIR | HOST[A-Z_]*
+#
+# 为什么 `CONFIG` 一定要在里面：真正出事的那个常量就叫 `DEFAULT_CONFIG`——
+# 名单若只写 `MCP_CONFIG`，就会**漏掉这次事故本身**（实测过，别改窄）。
+# 为什么不用 `*DIR*` / `*PATH*` 这类宽泛词：会命中 `CACHE_DIR`、`CONFIG_PATH`
+# 之类的每用户缓存/配置文件，噪声会逼人放宽规则。
+_HOST_ROOT_VAR_NAMES = (
+    r"(?:DSH_[A-Z_]*|[A-Z_]*PROFILE[A-Z_]*|[A-Z_]*CONFIG[A-Z_]*|SKILLS_DIR|HOST[A-Z_]*)"
+)
+# `${VAR:-<fallback>}` / `${VAR-<fallback>}`，fallback 取到右花括号为止
+SH_VAR_DEFAULT_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*):?-([^}]*)\}")
+# 回退值「看起来像宿主数据根」：家目录，或常见数据卷挂载根
+_HOST_ROOT_VALUE_RE = re.compile(
+    r"""^(?:["']?\s*)?(?:
+          ~ | \$HOME | \$\{HOME\} | /vol\d | /volume\d | /mnt/ | /srv/ | /opt/
+        | /root | /home/ | /Users/
+    )""",
+    re.VERBOSE,
+)
+# Python 侧：模块级常量被赋成家目录推导，或 `.get("VAR", <家目录推导>)` 当默认值
+_PY_HOME_DERIVATION = r"(?:Path\.home\(\)|os\.path\.expanduser\(|Path\(\s*[\"']~)"
+PY_MODULE_HOME_DEFAULT_RE = re.compile(
+    rf"^([A-Za-z_][A-Za-z0-9_]*)\s*=[^\n]*?{_PY_HOME_DERIVATION}",
+    re.MULTILINE,
+)
+PY_GET_HOME_DEFAULT_RE = re.compile(
+    rf"\.get\(\s*[\"']([A-Za-z_][A-Za-z0-9_]*)[\"']\s*,[^\n]*?{_PY_HOME_DERIVATION}"
+)
+
+# 已确认的写死默认值：**只报 WARN，不判 FAIL**。
+# ⚠️ 放进这个名单必须写理由 —— 它是「已知并接受」，不是「查不出来」。
+#    键是 (仓库相对路径, 变量/常量名)，**不按文件豁免**：按文件豁免会让该文件里
+#    将来任何新增的写死默认值一起溜过去。
+KNOWN_HARDCODED_HOST_DEFAULTS: dict[tuple[str, str], str] = {
+    ("scripts/update-and-install.sh", "DSH_HOME"):
+        "2026-09-23 记录：技能落点未接 resolve-profile.sh，换机器需显式传 DSH_HOME",
+    ("scripts/start-dsh-with-plugin.sh", "DSH_RUNTIME"):
+        "2026-09-23 记录：DSH_RUNTIME 是运行时（代码）根，目前没有解析链，只能显式传参",
+    ("skills/lucky-api/scripts/lucky_api.py", "CONFIG_PATH"):
+        "仓库明确约定：凭据/每用户配置放 `~/.<name>_config.json` 这类外部文件"
+        "（见 mcps/README.md「凭据约定」），此处的 `~/.lucky_api.json` 正是该约定本身",
+}
+
 PROFILE_LIB_REL = "scripts/lib/resolve-profile.sh"
 # 允许 source 解析库的写法（两种 shell 写法都认）
 _SOURCE_RE = re.compile(
@@ -278,10 +370,88 @@ _RESOLVER_DEF_RE = re.compile(
 )
 
 
-def check_host_path_not_hardcoded(repo: Path) -> None:
-    """宿主路径（profile）**不得**写死成唯一默认值 —— 必须运行时探测。
+def _scan_hardcoded_host_defaults(repo: Path) -> tuple[list[str], list[str]]:
+    """扫描「把宿主数据根写死成唯一默认值」的全部形态。
 
-    这是 2026-09-21 事故的直接防线，而那已经是**同一类问题的第二次出现**：
+    返回 `(未知违规, 已知豁免)`，每项都是可直接打印的 `路径:行号  [名字] 内容`。
+
+    三种形态（前两种是已经咬过人的，第三种是同类扩展）：
+      ① `${...profile...:-/绝对路径}`   —— shell
+      ② `${VAR:-$HOME/...}` / `${VAR:-~...}`（VAR 名命中宿主语义）—— shell
+      ③ `NAME = Path.home() / ...` / `.get("VAR", <家目录推导>)` —— Python
+    """
+    unknown: list[str] = []
+    known: list[str] = []
+
+    def record(rel: str, lineno: int, name: str, snippet: str) -> None:
+        entry = f"{rel}:{lineno}  [{name}] {snippet.strip()[:88]}"
+        reason = KNOWN_HARDCODED_HOST_DEFAULTS.get((rel, name))
+        if reason:
+            known.append(f"{entry}\n            ↳ 已知豁免：{reason}")
+        else:
+            unknown.append(entry)
+
+    for f in sorted(list(repo.rglob("*.sh")) + list(repo.rglob("*.py"))):
+        rel = f.relative_to(repo).as_posix()
+        if rel.startswith((".git/", ".workbuddy/", "temp/", "node_modules/")):
+            continue
+        try:
+            raw = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        code = _strip_sh_comments(raw) if f.suffix == ".sh" else _strip_py_comments(raw)
+        lines = code.splitlines()
+
+        def snippet_at(pos: int) -> tuple[int, str]:
+            ln = code[:pos].count("\n") + 1
+            return ln, (lines[ln - 1] if ln <= len(lines) else "")
+
+        # ① profile 变量回退到绝对路径（2026-09-21 事故）
+        #    记下它命中的区间：同一处默认值会被 ② 再匹配一次（`${PROFILE_DIR:-/vol2/...}`
+        #    同时满足「名字含 PROFILE」和「回退值是数据卷根」），否则同一行报两遍，
+        #    看报告的人会以为有两处问题。
+        claimed: list[tuple[int, int]] = []
+        for m in HARDCODED_HOST_PATH_RE.finditer(code):
+            claimed.append(m.span())
+            ln, s = snippet_at(m.start())
+            record(rel, ln, "PROFILE_DIR", s)
+
+        # ② shell 变量默认值回退到家目录 / 数据卷根（2026-09-23 事故）
+        for m in SH_VAR_DEFAULT_RE.finditer(code):
+            if any(a <= m.start() < b for a, b in claimed):
+                continue
+            name, fallback = m.group(1), m.group(2)
+            if not re.fullmatch(_HOST_ROOT_VAR_NAMES, name):
+                continue
+            if " " in fallback:
+                # 空格分隔的多个候选 = 搜索集，不是「唯一默认值」，不算写死落点
+                continue
+            if not _HOST_ROOT_VALUE_RE.match(fallback):
+                continue
+            ln, s = snippet_at(m.start())
+            record(rel, ln, name, s)
+
+        # ③ Python：模块级常量 / .get 默认值被赋成家目录推导。
+        #    ⚠️ 同样要过名字名单 —— 否则 CACHE_DIR / USER_SKILLS 之类
+        #    （每用户缓存、WorkBuddy 自己的用户目录）会一起被误报。
+        for m in PY_MODULE_HOME_DEFAULT_RE.finditer(code):
+            if not re.fullmatch(_HOST_ROOT_VAR_NAMES, m.group(1)):
+                continue
+            ln, s = snippet_at(m.start())
+            record(rel, ln, m.group(1), s)
+        for m in PY_GET_HOME_DEFAULT_RE.finditer(code):
+            if not re.fullmatch(_HOST_ROOT_VAR_NAMES, m.group(1)):
+                continue
+            ln, s = snippet_at(m.start())
+            record(rel, ln, m.group(1), s)
+
+    return unknown, known
+
+
+def check_host_path_not_hardcoded(repo: Path) -> None:
+    """宿主路径**不得**写死成唯一默认值 —— 必须运行时探测。
+
+    这是 2026-09-21 事故的直接防线，而事后看，**同一类问题已经出现过三次**：
 
       第 1 次 —— 面板 `cordis.patch.yml` 写死 `skillsDir: '~/.dsh/skills'`
                 （容器里展开成 `/root/.dsh/skills`，DSH 扫的是 `$DSH_HOME/skills`）。
@@ -290,48 +460,55 @@ def check_host_path_not_hardcoded(repo: Path) -> None:
                 于是**只有那一台机器**能装。用户换一台部署就跑出：
                     ERROR: DSH profile 不存在: /vol2/@appdata/...
                 用户原话：「**我不止部署一个机器的 DSH**」。
+      第 3 次 —— `mcps/hindsight/scripts/` 写死（2026-09-23 修）
+                    apply_to_config.py   DEFAULT_CONFIG = Path.home() / ".workbuddy" / "mcp.json"
+                    selfheal.sh          MCP_CONFIG="${MCP_CONFIG:-$HOME/.workbuddy/mcp.json}"
+                两份都指向容器内的 `/root/...`，在 NAS 上必然报「配置文件不存在」，
+                而报错里看不出正确位置其实在别处。
+                唯一实现现为 `mcps/hindsight/scripts/hindsight_paths.py`。
 
-    两次共同点：**把「某台机器观察到的事实」当成了「普适默认值」**。
+    三次共同点：**把「某台机器观察到的事实」当成了「普适默认值」**。
     失效形态也一致：不报错、或者报错信息只说「不存在」，不说「我找过哪些地方」。
 
     ## 判据
-    (a) 任何 `.sh` 都不得出现 `${<含 profile 的变量>:-/绝对路径}`。
-        这正是「唯一默认值写死」的形态；注释里引用它作反例不算（先剔整行注释）。
-    (b) 唯一实现 `scripts/lib/resolve-profile.sh` 必须存在，且
-        `resolve_dsh_profile_dir` **只能在这个文件里定义一次**。
-    (c) 安装 / 卸载两个脚本必须都 **source** 它（不能有一边偷偷自己算）。
+
+    只认「**默认值形态**」，且变量/常量名须命中宿主数据根语义（见
+    `_HOST_ROOT_VAR_NAMES` 与 `_scan_hardcoded_host_defaults`）。三条：
+      (a) `.sh` **与 `.py`** 都不得出现上述三种形态的写死默认值。
+          注释与 docstring 里引用旧写法**不算**（`_strip_*_comments` 已剔除）。
+      (b) 唯一实现 `scripts/lib/resolve-profile.sh` 必须存在，且
+          `resolve_dsh_profile_dir` **只能在这个文件里定义一次**。
+      (c) 安装 / 卸载两个脚本必须都 **source** 它（不能有一边偷偷自己算）。
+
+    ⚠️ 为什么不扫「路径字面量」（`~/.workbuddy` 之类）：实测会命中帮助文本、
+    测试夹具、工具链路径、以及仓库自己约定的 `~/.<name>_config.json`。噪声会逼人
+    放宽规则 = 取消守卫（详见 `_HOST_ROOT_VAR_NAMES` 上方的注释）。
 
     ⚠️ 为什么必须有这条：`check_install_targets`(2.5) 只查「落点目录名 == 包名」，
     `check_install_uninstall_parity`(2.7) 只查「两个脚本彼此一致」——
     **两者都查不出「这个默认值本身是错的/只对一台机器成立」**。
     同「只检查唯一实现内部自洽照不出第二份实现」，这里也是必须另做结构性扫描的一类。
     """
-    offenders: list[str] = []
+    unknown, known = _scan_hardcoded_host_defaults(repo)
 
-    for sh in sorted(repo.rglob("*.sh")):
-        rel = sh.relative_to(repo).as_posix()
-        if rel.startswith(".git/") or rel.startswith(".workbuddy/"):
-            continue
-        try:
-            raw = sh.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        code = _strip_sh_comments(raw)
-        for m in HARDCODED_HOST_PATH_RE.finditer(code):
-            line = code[:m.start()].count("\n") + 1
-            snippet = code.splitlines()[line - 1].strip()
-            offenders.append(f"{rel}:{line}  {snippet[:90]}")
-
-    if offenders:
-        bad(f"{len(offenders)} 处把宿主路径写死成唯一默认值"
-            f"（换一台机器就装不上）")
-        for o in offenders:
+    if unknown:
+        bad(f"{len(unknown)} 处把宿主路径写死成唯一默认值（换一台机器就装不上）")
+        for o in unknown:
             print(f"         {o}")
-        print("         改法：删掉该默认值，改为 source scripts/lib/resolve-profile.sh")
-        print("               并调用 resolve_dsh_profile_dir —— 运行时探测 + 唯一命中才采用。")
-        print("         症状：换个部署就报「profile 不存在」，而正确目录其实就在别处。")
+        print("         改法：删掉该默认值，改为「运行时探测 + 唯一命中才采用」。")
+        print("               DSH profile 走 scripts/lib/resolve-profile.sh；")
+        print("               MCP 配置走 mcps/hindsight/scripts/hindsight_paths.py；")
+        print("               其它落点请照同样形状写一个解析器，别再就地写一份。")
+        print("         症状：换个部署就报「XX 不存在」，而正确目录其实就在别处。")
     else:
-        ok("没有任何 .sh 把 profile 路径写死成唯一默认值（均为运行时探测）")
+        ok("没有把宿主路径写死成唯一默认值（均为运行时探测或显式传参）")
+
+    if known:
+        warn(f"{len(known)} 处已知的写死默认值（历史遗留，已登记原因，换机器需显式传参）")
+        for o in known:
+            print(f"         {o}")
+    else:
+        ok("已知豁免名单为空（说明历史遗留项都已修掉）")
 
     lib = repo / PROFILE_LIB_REL
     if not lib.is_file():

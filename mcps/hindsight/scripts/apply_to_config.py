@@ -8,11 +8,18 @@
 3. **写前必须验证**（默认开启），避免把坏地址写进配置。
 4. **原子写**（写临时文件再替换），避免写到一半损坏配置。
 5. 用 JSON 库读写，不做文本替换（后者依赖"某行恰好存在"，很脆）。
+6. **落点必须运行时探测** —— 本脚本历史上写死过
+   `DEFAULT_CONFIG = Path.home() / ".workbuddy" / "mcp.json"`，在 NAS/DSH 上
+   指向容器内的 `/root/...`，只会报「配置文件不存在」。现在改为问
+   `hindsight_paths.py`（唯一实现），本脚本不再自己算一份。
 
 ## 用法
 
-    # 写入 WorkBuddy 配置（默认路径）
+    # 写入生效落点（运行时探测，通常是 ~/.workbuddy/mcp.json）
     python3 apply_to_config.py
+
+    # 只看落点解析过程（候选逐条列出，最省事的排查入口）
+    python3 apply_to_config.py --print-config-path
 
     # 写入指定文件（例如 NAS 上 DSH 的配置）
     python3 apply_to_config.py --config /path/to/mcp.json
@@ -27,7 +34,7 @@
     0 = 成功（或 dry-run 正常）
     1 = 探测失败
     2 = 验证失败，已中止（未写入）
-    3 = 配置文件问题（不存在/无法解析/无 mcpServers）
+    3 = 配置文件问题（落点无法确定/不存在/无法解析/无 mcpServers/无 hindsight 条目）
 """
 from __future__ import annotations
 
@@ -44,15 +51,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 RESOLVER = HERE / "resolve_hindsight_url.py"
 
-DEFAULT_CONFIG = Path.home() / ".workbuddy" / "mcp.json"
-SERVER_NAME = "hindsight"
+# 落点解析的唯一实现在同目录的 hindsight_paths.py —— 不在本文件里再写一份。
+if str(HERE) not in sys.path:
+    sys.path.insert(0, str(HERE))
+import hindsight_paths  # noqa: E402  （必须在 sys.path 调整之后导入）
 
-
-def expand(p: str) -> Path:
-    """展开 ~ —— Node/Python 的 fs 不认波浪号，配置里可能带。"""
-    if p.startswith("~"):
-        return Path(os.path.expanduser(p))
-    return Path(p)
+SERVER_NAME = hindsight_paths.SERVER_NAME
 
 
 def resolve_url(verify: bool) -> tuple[str | None, bool]:
@@ -81,13 +85,42 @@ def resolve_url(verify: bool) -> tuple[str | None, bool]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="写入 hindsight MCP 地址到配置文件")
-    ap.add_argument("--config", default=str(DEFAULT_CONFIG), help="目标 MCP 配置文件")
+    ap.add_argument(
+        "--config", default=None,
+        help="目标 MCP 配置文件（或目录，会在其中自动定位）。"
+             "不传则运行时探测：$MCP_CONFIG > $DSH_MCP_CONFIG > "
+             "$DSH_HOME 子树 > $WORKBUDDY_HOME > ~/.workbuddy",
+    )
     ap.add_argument("--dry-run", action="store_true", help="只预览，不写入")
     ap.add_argument("--no-verify", action="store_true", help="跳过握手验证（不推荐）")
     ap.add_argument("--url", help="直接指定 URL，跳过探测（用于手工修正）")
+    ap.add_argument(
+        "--print-config-path", action="store_true",
+        help="只打印落点解析结果（全部候选逐条列出），不探测也不写入",
+    )
     args = ap.parse_args()
 
-    cfg_path = expand(args.config)
+    # 落点解析：唯一实现，不在本文件里再算一份
+    resolved = hindsight_paths.resolve_config_path(args.config)
+
+    if args.print_config_path:
+        print(hindsight_paths.explain(resolved, hindsight_paths.resolve_log_path(resolved["path"])))
+        return 0 if resolved["path"] is not None else 3
+
+    cfg_path = resolved["path"]
+    print(f"目标落点: {cfg_path or '（无）'}")
+    print(f"  来自:   {resolved['source']}")
+    for w in resolved["warnings"]:
+        print(f"⚠️ {w}", file=sys.stderr)
+
+    if cfg_path is None:
+        print(
+            "\n无法确定 MCP 配置文件落点，已中止。\n"
+            "用 --print-config-path 查看全部候选与各自状态；"
+            "或用 --config 显式指定目标文件。",
+            file=sys.stderr,
+        )
+        return 3
 
     verified = False
     if args.url:
@@ -106,9 +139,11 @@ def main() -> int:
             return 2
 
     if not cfg_path.is_file():
-        print(f"配置文件不存在：{cfg_path}", file=sys.stderr)
+        print(f"\n配置文件不存在：{cfg_path}", file=sys.stderr)
         print(
-            "提示：可先用 --config 指定正确路径；或确认该 MCP 客户端是否已初始化过配置。",
+            "提示：用 --print-config-path 可看到**全部候选**与各自状态"
+            "（哪份存在、哪份含 hindsight 条目）——\n"
+            "      通常能直接看出正确位置其实在别处；也可用 --config 显式指定。",
             file=sys.stderr,
         )
         return 3

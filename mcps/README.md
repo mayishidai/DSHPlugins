@@ -33,6 +33,12 @@ MCP 的配置**不进 DSH 目录**，它由 MCP 客户端读取。DSH 与 WorkBu
 | WorkBuddy | `~/.workbuddy/mcp.json` | `mcpServers` 下加条目 |
 | DSH | `$DSH_HOME` 下的 MCP 配置 | 见下方「DSH 侧位置」 |
 
+> ⚠️ **这两个路径是「事实」，不是「默认值」。** 脚本里**不许**把它们写成
+> `VAR="${VAR:-$HOME/...}"` 那样的回退默认 —— 容器里 `$HOME` 是 `/root`，
+> 而真实数据卷挂在别处，写死只会得到「文件不存在」而看不出正确位置在哪儿。
+> 一律**运行时探测**（`hindsight` 的做法见 `mcps/hindsight/scripts/hindsight_paths.py`），
+> 由 `validate_repo.py` 的 2.10 守卫兜底。
+
 合并片段示例（**注意 `mcp.json` 的键名，不是 `servers`**）：
 
 ```json
@@ -59,12 +65,17 @@ $DSH_HOME = /vol2/@appdata/deepseek.harness/dsh-data
 profile    = $DSH_HOME/profiles/web
 ```
 
-⚠️ **DSH 的 MCP 配置具体文件名尚未确认**（本机无 DSH）。首次接入时先在 NAS 上确认：
+**MCP 配置文件名不猜。** 本机无 DSH，无法核实它到底叫什么；但也不需要知道 ——
+按**内容特征**（含 `mcpServers` 键的 `.json`）在 `$DSH_HOME` 子树里找即可，
+而且能自证「扫了多少个、命中几个」。`hindsight` 就是这么做的：
 
 ```bash
-ls -la /vol2/@appdata/deepseek.harness/dsh-data/ | grep -i mcp
-ls -la /vol2/@appdata/deepseek.harness/dsh-data/profiles/web/ | grep -i mcp
+DSH_HOME=/vol2/@appdata/deepseek.harness/dsh-data \
+  python3 mcps/hindsight/scripts/hindsight_paths.py --explain
 ```
+
+> 早期文档要求人工 `ls | grep -i mcp` 去猜文件名 —— 那种做法把「我不知道」
+> 变成了「使用者自己去找」，且每次都重来。**能自证就别让人猜。**
 
 > **DSH 与 WorkBuddy 的配置是两份独立文件。** 给一边配好不会让另一边生效，
 > 两边需各自配一次。可复用的是脚本（探测逻辑与客户端无关）。
@@ -84,7 +95,7 @@ ls -la /vol2/@appdata/deepseek.harness/dsh-data/profiles/web/ | grep -i mcp
 |---|---|---|
 | [hindsight](hindsight/) | 自建 Hindsight 长期记忆服务（隧道后，端口会变） | 模板 + 探测脚本（**不硬编码地址**） |
 
-### 两条经验（来自 hindsight 的接入）
+### 三条经验（来自 hindsight 的接入）
 
 **① 地址易变的 MCP 不要硬编码。**
 
@@ -101,6 +112,21 @@ ls -la /vol2/@appdata/deepseek.harness/dsh-data/profiles/web/ | grep -i mcp
 |---|---|---|
 | 用途 | 用来**探测**最新直连地址 | 填进配置**实际连接** |
 | 是否写进配置 | ❌ 不写（客户端不跟随 302） | ✅ 写 |
+
+**③ 「配置文件在哪」也是易变的 —— 同样不许写死。**
+
+和第 ① 条是同一件事的另一半：地址不能写死，**落点也不能写死**。
+同一个 MCP 在 WorkBuddy（`~/.workbuddy/mcp.json`）与 DSH（`$DSH_HOME` 下）是两份
+不同文件；而容器里 `$HOME` 是 `/root`，写死 `~` 必然指错。
+
+写法要求（`hindsight` 的实现在 `hindsight/scripts/hindsight_paths.py`）：
+
+- 显式来源优先：`--config` > `$MCP_CONFIG` > `$DSH_MCP_CONFIG`
+- 宿主相关落点**运行时探测**，**权威来源不偏离**（`$DSH_HOME` 一旦设置就只在它
+  子树里挑，不跨到 `~` —— 因为 `~` 下那份很可能正是过去写死默认值造出来的残留）
+- **能自证**：暴露「全部候选 + 各自检查结果」（存在？含 `mcpServers`？含目标条目？）
+- **错位主动喊**：生效落点里没有目标条目、但别处有 → 明确说「很可能落点错位」
+- 解析不出来就**非零退出**，绝不静默返回一个假的默认值
 
 ## 校验
 
