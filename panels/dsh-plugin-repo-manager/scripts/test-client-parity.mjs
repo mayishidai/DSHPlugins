@@ -6,15 +6,21 @@
  * ## 为什么需要这个文件
  *
  * `generate-client.mjs` 内嵌了 `src/client/*` 的**第二份实现**（因为目标机
- * 不编译，只能直接产出自包含 bundle）。两份必然漂移，本项目已经**实际踩过三次**：
+ * 不编译，只能直接产出自包含 bundle）。两份必然漂移，本项目已经**实际踩过五次**：
  *
  *   1. install 落点 —— 插件内 install.sh 与仓库根脚本各写一份 → DSH 报
  *      `invalid plugin, ... received undefined`
  *   2. 侧边栏显隐 —— 源码有开关、bundle 里没读 → 配置改了不生效（死配置）
  *   3. **错误渲染** —— 源码显示 `{error}` 内容、bundle 只画「重试」按钮
  *      → 所有失败长得一模一样，无法定位
+ *   4. 卸载失败可见性 —— 后端抛错、前端只在控制台记录 → 「点了没反应」
+ *   5. **布局尺寸值** —— 改了 src 那份、漏改生成器 → 「开发时看到的」与
+ *      「用户实际跑到的」尺寸不同
+ *   6. locale 字典（第 11 节）—— 同一个 `settings.pluginRepo` 命名空间两份字典
+ *      键集与文案都不一样：src 多 6 个键、英文卸载确认文案还带着与中文矛盾的
+ *      "This action cannot be undone."
  *
- * 三次的共同点：**编译通过、测试全绿、运行时不报错**。
+ * 五次的共同点：**编译通过、测试全绿、运行时不报错**。
  * 所以「靠人眼比对两份」是不可靠的，必须用机器钉住。
  *
  * ## 判据为什么不比较源码文本
@@ -180,6 +186,108 @@ bothHave('给孤立条目标出「仓库中已不存在」', /仓库中已不存
 bothHave('孤立条目的副标题回落到 repoDirName（为 null 时不显示路径）', /repoDirName/)
 check('bundle（产物）里也标了孤立条目', /仓库中已不存在/.test(clientJs))
 check('产物渲染了 plugin.repoDirName', /plugin\.repoDirName/.test(clientJs))
+
+console.log('\n[11. locale 字典：同一命名空间的两份字典必须逐键一致（第 6 次漂移候选）]')
+// 起因（2026-09-24）：`src/client/locales.ts` 与 `generate-client.mjs` 内嵌的字典
+// 是**同一个 locale 命名空间 `settings.pluginRepo`** 的两份注册副本 —— 两边各
+// `locale.register(NS, {zh, en})` 一次，宿主拿到哪份取决于哪份实现被加载。实测两份
+// 早已漂移：src 多出 6 个键（uninstallSuccess / pollIntervalHint 等），英文卸载确认
+// 文案一边是 `Uninstall "{{name}}"?'`、一边是
+// 'Are you sure ... This action cannot be undone.' —— 后者与中文
+// 「仓库目录不受影响」**直接矛盾**（卸载只删 skills 那份，仓库不动），会让人以为没有退路。
+//
+// 判据为什么是「逐键逐字」而不是第 9 节那种「数值集合对称差」：
+// locale 的每个值就是**用户最终看到的字**，没有「书写风格」这个干扰项，
+// 所以这里可以也应当比到最严 —— 逐字。缩进差异由解析器吃掉。
+//
+// 空转防护：解析器一旦失效（标记改名、格式变化）会得到**两个空集合**，而「空对空」
+// 恒等于。所以先断言每个块都解析出下限以上的键数，再比对内容。
+
+const localesSrc = readFileSync(join(PKG, 'src', 'client', 'locales.ts'), 'utf-8')
+
+/** 取 [startMarker, endMarker) 之间的文本；任一端找不到返回 null。 */
+function sliceBlock(text, startMarker, endMarker) {
+  const i = text.indexOf(startMarker)
+  if (i < 0) return null
+  const j = text.indexOf(endMarker, i + startMarker.length)
+  if (j < 0) return null
+  return text.slice(i + startMarker.length, j)
+}
+
+/**
+ * 把 `key: 'value',` 行解析成 Map。
+ * 值为单引号串且**不含转义**（locale 文案里既无单引号也无反斜杠），故 `[^']*` 够用。
+ * 若将来真的出现 `\'`，这里会解析失败 —— 由下面的键数下限断言兜住，不会静默变空。
+ */
+function parseDict(block) {
+  const out = new Map()
+  if (!block) return out
+  const re = /(?:^|[\s,{])([A-Za-z_][A-Za-z0-9_]*)\s*:\s*'([^']*)'/g
+  let m
+  while ((m = re.exec(block))) out.set(m[1], m[2])
+  return out
+}
+
+const dicts = {
+  'src zh': parseDict(sliceBlock(localesSrc, 'export const zh = {', '} as const')),
+  'src en': parseDict(sliceBlock(localesSrc, 'export const en = {', '} as const')),
+  'gen zh': parseDict(sliceBlock(bundleGen, 'var zh = {', 'var en = {')),
+  'gen en': parseDict(sliceBlock(bundleGen, 'var en = {', '\n    };')),
+  'bundle zh': parseDict(sliceBlock(clientJs, 'var zh = {', 'var en = {')),
+  'bundle en': parseDict(sliceBlock(clientJs, 'var en = {', '\n    };')),
+}
+
+// 空转防护：六个块都要解析出来，且键数不少于下限（当前 31 个）
+const MIN_KEYS = 25
+for (const [name, dict] of Object.entries(dicts)) {
+  check(`${name} 解析出 ≥ ${MIN_KEYS} 个键（实得 ${dict.size}）`, dict.size >= MIN_KEYS)
+}
+
+/** 键集必须相同，共有键的文案必须逐字相同。 */
+function sameDict(label, a, b) {
+  const [left, right] = label.split(' / ')
+  const onlyA = [...a.keys()].filter(k => !b.has(k))
+  const onlyB = [...b.keys()].filter(k => !a.has(k))
+  const diffText = [...a.keys()].filter(k => b.has(k) && a.get(k) !== b.get(k))
+  const detail =
+    (onlyA.length ? `\n      只在 ${left}: ${onlyA.join(', ')}` : '') +
+    (onlyB.length ? `\n      只在 ${right}: ${onlyB.join(', ')}` : '') +
+    (diffText.length
+      ? `\n      文案不同: ${diffText.map(k => `${k}（${left}="${a.get(k)}" / ${right}="${b.get(k)}"）`).join('  ')}`
+      : '')
+  check(`${label} 键集与文案一致（${a.size} 键）`,
+    onlyA.length === 0 && onlyB.length === 0 && diffText.length === 0, detail)
+}
+
+sameDict('src zh / gen zh', dicts['src zh'], dicts['gen zh'])
+sameDict('src en / gen en', dicts['src en'], dicts['gen en'])
+sameDict('gen zh / bundle zh', dicts['gen zh'], dicts['bundle zh'])
+sameDict('gen en / bundle en', dicts['gen en'], dicts['bundle en'])
+
+// 同一份里的 zh / en 只比**键集** —— 它们本来就该是两种语言的不同文案，
+// 拿 sameDict 比文案会把「翻译」误判成「漂移」。
+function sameKeySet(label, a, b) {
+  const onlyA = [...a.keys()].filter(k => !b.has(k))
+  const onlyB = [...b.keys()].filter(k => !a.has(k))
+  check(`${label} 键集一致（各 ${a.size} / ${b.size} 键）`,
+    onlyA.length === 0 && onlyB.length === 0,
+    (onlyA.length ? `\n      只在 ${label.split(' / ')[0]}: ${onlyA.join(', ')}` : '') +
+    (onlyB.length ? `\n      只在 ${label.split(' / ')[1]}: ${onlyB.join(', ')}` : ''))
+}
+sameKeySet('src zh / src en', dicts['src zh'], dicts['src en'])
+sameKeySet('gen zh / gen en', dicts['gen zh'], dicts['gen en'])
+
+// 占位符必须在字典里真的存在（否则调用处 `.replace('{{name}}', ...)` 会落空）
+for (const name of ['src zh', 'gen zh']) {
+  const withName = [...dicts[name]].filter(([, v]) => v.includes('{{name}}')).map(([k]) => k)
+  check(`${name} 含 {{name}} 占位符的键 ≥ 2（实得 ${withName.length}：${withName.join(', ')}）`,
+    withName.length >= 2)
+}
+// 英文侧不得再有与中文矛盾的「不可撤销」表述
+for (const name of ['src en', 'gen en', 'bundle en']) {
+  const bad = [...dicts[name]].filter(([, v]) => /cannot be undone/i.test(v)).map(([k]) => k)
+  check(`${name} 不再含误导性的 "cannot be undone"`, bad.length === 0, bad.join(', '))
+}
 
 console.log(`\n结果: ${pass} 通过 / ${fail} 失败 / 共 ${pass + fail} 例`)
 if (fail > 0) {

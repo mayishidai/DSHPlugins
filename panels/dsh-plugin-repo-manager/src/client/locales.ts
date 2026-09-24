@@ -1,4 +1,19 @@
-/** Copy dictionaries for the plugin repo Settings section. */
+/** Copy dictionaries for the plugin repo Settings section.
+ *
+ * ⚠️ 本文件与 `generate-client.mjs` 里内嵌的 `zh` / `en` **是同一个 locale 命名空间
+ * （`settings.pluginRepo`）的两份字典**，必须逐字一致 —— 两边各注册一次，宿主拿到哪份
+ * 取决于哪份实现被加载。`scripts/test-client-parity.mjs` 的第 11 节会逐键比对，任一键
+ * 只在一侧存在、或共有键文案不同，都会 FAIL。
+ *
+ * 对不一致时的取舍规则（唯一一处声明，别在别处再写）：
+ *   1. **bundle 真的会渲染的键**（`zh.xxx` 被直接读到的那些）→ 以 bundle 为准，不改用户可见文案；
+ *   2. **两边都没渲染的键**（error / version / settings / skillsDir / openInFileExplorer /
+ *      *_Success / *_Failed / pollIntervalHint / pollIntervalDefault）→ 以本文件为准（它是
+ *      `PluginRepoLocaleKey` 类型契约的来源）；
+ *   3. `confirmUninstallMsg` / `confirmInstallMsg` 的**英文**是有意重写：旧文案
+ *      "This action cannot be undone." 与中文「仓库目录不受影响」直接矛盾（卸载只删
+ *      skills 目录那份，仓库不动），会让人以为没有退路。
+ */
 export const zh = {
   tab: '我的插件仓库',
   sidebar: '插件仓库',
@@ -25,7 +40,7 @@ export const zh = {
   refresh: '刷新',
   refreshing: '刷新中...',
   settings: '设置',
-  pollInterval: '刷新间隔',
+  pollInterval: '刷新间隔 (ms)',
   pollIntervalHint: '自动刷新的时间间隔（毫秒）',
   pollIntervalDefault: '3000',
   openInFileExplorer: '在文件管理器中打开',
@@ -47,9 +62,9 @@ export const en = {
   uninstall: 'Uninstall',
   uninstalling: 'Uninstalling...',
   confirmUninstall: 'Confirm Uninstall',
-  confirmUninstallMsg: 'Are you sure you want to uninstall "{{name}}"? This action cannot be undone.',
+  confirmUninstallMsg: 'Uninstall "{{name}}"? It will be removed from the DSH skills directory; the repository directory is not affected.',
   confirmInstall: 'Confirm Install',
-  confirmInstallMsg: 'Are you sure you want to install "{{name}}"? It will be copied to skills directory.',
+  confirmInstallMsg: 'Install "{{name}}"? It will be copied from the repository to the skills directory.',
   uninstallSuccess: 'Uninstall successful',
   uninstallFailed: 'Uninstall failed',
   installSuccess: 'Install successful',
@@ -59,7 +74,7 @@ export const en = {
   refresh: 'Refresh',
   refreshing: 'Refreshing...',
   settings: 'Settings',
-  pollInterval: 'Refresh Interval',
+  pollInterval: 'Poll Interval (ms)',
   pollIntervalHint: 'Auto-refresh interval in milliseconds',
   pollIntervalDefault: '3000',
   openInFileExplorer: 'Open in File Explorer',

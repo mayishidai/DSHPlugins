@@ -293,7 +293,7 @@ bash ../../scripts/uninstall-from-profile.sh
 ```bash
 npm install          # 首次
 npm run build        # 服务端 tsc + 客户端 bundle
-npm test             # 九套测试，共 233 例
+npm test             # 全部测试套件（清单见 package.json 的 test 脚本）
 npm run typecheck    # 0 error
 ```
 
@@ -357,17 +357,23 @@ dsh-plugin-repo-manager/
 ├── tsconfig.build.json     # 编译配置（输出到 dist/）
 ├── generate-client.mjs     # 客户端 bundle 生成脚本
 └── scripts/
-    ├── install.sh              # 转发桩（唯一实现在仓库根 scripts/）
-    ├── test-isnewer.mjs        # 版本比较单元测试（23 例）
-    ├── test-install-update.mjs # 安装/更新流程端到端测试（24 例）
-    ├── test-paths.mjs          # 路径解析测试（14 例）
-    ├── test-sidebar.mjs        # 侧边栏配置与注册测试（35 例）
-    ├── test-client-parity.mjs  # 源码 / bundle 副本一致性（31 例，含布局尺寸同款检查）
-    ├── test-route-prefix.mjs   # 路由前缀归一化（25 例）
-    ├── test-api-e2e.mjs        # HTTP API 端到端，真起 server（36 例）
-    ├── test-esm-safety.mjs     # ESM 里禁用 require + 描述字段（22 例）
-    └── test-skills-dir.mjs     # skillsDir 解析 + 错位告警（23 例）
+    ├── install.sh                       # 转发桩（唯一实现在仓库根 scripts/）
+    ├── test-isnewer.mjs                 # 版本比较单元测试
+    ├── test-install-update.mjs          # 安装/更新流程端到端测试
+    ├── test-paths.mjs                   # 路径解析测试
+    ├── test-sidebar.mjs                 # 侧边栏配置与注册测试
+    ├── test-client-parity.mjs           # 源码 / bundle 副本一致性（含布局尺寸、locale 字典）
+    ├── test-client-parity-negatives.mjs # 上者的反向回归（注入漂移，证其非空转）
+    ├── test-route-prefix.mjs            # 路由前缀归一化
+    ├── test-api-e2e.mjs                 # HTTP API 端到端，真起 server
+    ├── test-esm-safety.mjs              # ESM 里禁用 require + 描述字段
+    ├── test-skills-dir.mjs              # skillsDir 解析 + 错位告警
+    └── test-orphans.mjs                 # 孤立已装技能（DSH 里有、仓库里已没有）
 ```
+
+> **这里刻意不写每套的例数** —— 会漂：本行曾长期写着「九套，共 233 例」，
+> 实际早已是 11 套 286 例（且当时还漏列 `test-orphans.mjs`）。
+> 例数请直接看 `npm test` 的逐套输出。
 
 ### HTTP API
 
@@ -448,7 +454,7 @@ npm run typecheck
 # 编译（服务端 → dist/，客户端 → client/client.js）
 npm run build
 
-# 测试（23+24+14+35+37+25+36+22+23+24 = 263 例 / 十套）
+# 测试（套件清单见 package.json 的 test 脚本；此处不复述例数，会漂）
 npm test
 ```
 

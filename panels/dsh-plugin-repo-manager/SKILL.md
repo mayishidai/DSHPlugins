@@ -228,7 +228,7 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 npm install          # 首次
 npm run typecheck    # 期望 0 error
 npm run build        # 服务端 → dist/，客户端 → client/client.js
-npm test             # 九套，共 233 例
+npm test             # 全部套件（清单见 package.json 的 test 脚本）
 ```
 
 > 改过 `src/client/*` 或 `generate-client.mjs` 后必须重跑 `npm run build`；

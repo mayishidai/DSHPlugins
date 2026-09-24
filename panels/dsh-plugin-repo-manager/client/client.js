@@ -9,6 +9,10 @@ window.__ModuleLoader__.load({
     var jsxRuntime = require('react/jsx-runtime');
 
     // Locale dictionaries
+    // ⚠️ 与 src/client/locales.ts **必须逐字一致**（同一个 locale 命名空间
+    // settings.pluginRepo，两边各注册一次）。「不一致时以谁为准」的规则写在
+    // src/client/locales.ts 顶部，此处不复述。scripts/test-client-parity.mjs 第 11 节逐键比对。
+    // ⚠️ 本文件整体是**模板字符串**：注释里不能出现反引号和美元加花括号，否则会提前闭合。
     var zh = {
       tab: '我的插件仓库',
       sidebar: '插件仓库',
@@ -26,24 +30,30 @@ window.__ModuleLoader__.load({
       confirmUninstallMsg: '确定要卸载 "{{name}}" 吗？将从 DSH 的 skills 目录删除，仓库目录不受影响。',
       confirmInstall: '确认安装',
       confirmInstallMsg: '确定要安装 "{{name}}" 吗？将从仓库复制到 skills 目录。',
+      uninstallSuccess: '卸载成功',
+      uninstallFailed: '卸载失败',
+      installSuccess: '安装成功',
+      installFailed: '安装失败',
       version: '版本',
       description: '描述',
       refresh: '刷新',
       refreshing: '刷新中...',
       settings: '设置',
       pollInterval: '刷新间隔 (ms)',
+      pollIntervalHint: '自动刷新的时间间隔（毫秒）',
+      pollIntervalDefault: '3000',
+      openInFileExplorer: '在文件管理器中打开',
       repoDir: '仓库目录',
       skillsDir: 'Skills 目录',
-      openInExplorer: '打开',
     };
 
     var en = {
       tab: 'My Plugin Repo',
       sidebar: 'Plugin Repo',
       loading: 'Loading...',
-      error: 'Failed to load',
+      error: 'Failed to load, please retry',
       retry: 'Retry',
-      empty: 'No plugins',
+      empty: 'No plugins in repository',
       installed: 'Installed',
       notInstalled: 'Not installed',
       install: 'Install',
@@ -51,18 +61,24 @@ window.__ModuleLoader__.load({
       uninstall: 'Uninstall',
       uninstalling: 'Uninstalling...',
       confirmUninstall: 'Confirm Uninstall',
-      confirmUninstallMsg: 'Uninstall "{{name}}"?',
+      confirmUninstallMsg: 'Uninstall "{{name}}"? It will be removed from the DSH skills directory; the repository directory is not affected.',
       confirmInstall: 'Confirm Install',
-      confirmInstallMsg: 'Install "{{name}}"?',
+      confirmInstallMsg: 'Install "{{name}}"? It will be copied from the repository to the skills directory.',
+      uninstallSuccess: 'Uninstall successful',
+      uninstallFailed: 'Uninstall failed',
+      installSuccess: 'Install successful',
+      installFailed: 'Install failed',
       version: 'Version',
       description: 'Description',
       refresh: 'Refresh',
       refreshing: 'Refreshing...',
       settings: 'Settings',
       pollInterval: 'Poll Interval (ms)',
-      repoDir: 'Repo Directory',
+      pollIntervalHint: 'Auto-refresh interval in milliseconds',
+      pollIntervalDefault: '3000',
+      openInFileExplorer: 'Open in File Explorer',
+      repoDir: 'Repository Directory',
       skillsDir: 'Skills Directory',
-      openInExplorer: 'Open',
     };
 
     // Component

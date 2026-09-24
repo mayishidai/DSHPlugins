@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-repo-manager",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "DSH web 面板插件：在设置页管理自建插件仓库，支持扫描、安装、卸载、版本检测与一键更新（更新前自动留档备份）；并列出「DSH 里装着但仓库中已不存在」的技能，让 DSH 侧也能被清理干净。",
   "author": "abczhou",
   "type": "runtime",
