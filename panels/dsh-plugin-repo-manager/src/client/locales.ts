@@ -1,7 +1,7 @@
-/** Copy dictionaries for the plugin repo Settings section.
+/** Copy dictionaries for the plugin repo global panel.
  *
  * ⚠️ 本文件与 `generate-client.mjs` 里内嵌的 `zh` / `en` **是同一个 locale 命名空间
- * （`settings.pluginRepo`）的两份字典**，必须逐字一致 —— 两边各注册一次，宿主拿到哪份
+ * （`pluginRepo`）的两份字典**，必须逐字一致 —— 两边各注册一次，宿主拿到哪份
  * 取决于哪份实现被加载。`scripts/test-client-parity.mjs` 的第 11 节会逐键比对，任一键
  * 只在一侧存在、或共有键文案不同，都会 FAIL。
  *
@@ -13,9 +13,11 @@
  *   3. `confirmUninstallMsg` / `confirmInstallMsg` 的**英文**是有意重写：旧文案
  *      "This action cannot be undone." 与中文「仓库目录不受影响」直接矛盾（卸载只删
  *      skills 目录那份，仓库不动），会让人以为没有退路。
+ *
+ * `tab` 键已于 2026-09-24 删除：入口从设置 tab 迁到侧边栏 `sidebar.panellist` 后，
+ * 它是唯一读者是那个已移除的注册项 —— 留着就是「有值、没人读」的死键。
  */
 export const zh = {
-  tab: '我的插件仓库',
   sidebar: '插件仓库',
   loading: '加载中...',
   error: '加载失败，请重试',
@@ -49,7 +51,6 @@ export const zh = {
 } as const
 
 export const en = {
-  tab: 'My Plugin Repo',
   sidebar: 'Plugin Repo',
   loading: 'Loading...',
   error: 'Failed to load, please retry',

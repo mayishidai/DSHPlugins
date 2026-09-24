@@ -1,10 +1,10 @@
 # dsh-plugin-repo-manager
 
-DSH 插件：从**主界面侧边栏**或设置面板管理自定义插件仓库。
+DSH 插件：从**主界面侧边栏**（New Session 按钮下方）打开「插件仓库」，管理自定义插件仓库。
 
 ## 功能
 
-- **主界面侧边栏图标按钮**：一键打开插件仓库面板（不必再翻设置）
+- **侧边栏入口**：左侧栏 New Session 按钮正下方的「插件仓库」行，点一下把面板开到**主界面工作区**
 - 查看插件仓库中的所有插件
 - 显示已安装/未安装状态
 - 一键安装 / 一键卸载已安装插件（带确认对话框）
@@ -15,39 +15,69 @@ DSH 插件：从**主界面侧边栏**或设置面板管理自定义插件仓库
 - **更新留档**：更新前自动整目录备份为 `<插件名>.bak-<ISO时间戳>`，并在 `version.json` 记录 `previousVersion` / `updatedAt` / `backupDir`
 - 支持多语言（中文/英文）
 
-## 两个入口
+## 入口与席位
 
-插件同时注册两个位置，两处渲染同一个面板：
+只有一个入口：**侧边栏的 `sidebar.panellist`**（ui-sidebar 为「全局面板入口」保留的席位）。
+它在 `SidebarRoot` 的渲染顺序里紧接 New Session 按钮之后：
 
-| 入口 | 槽位 | 说明 |
-|------|------|------|
-| **主界面侧边栏** | `sidebar` | 左侧竖条上的箱子图标按钮，点击打开面板。可用 `showSidebarButton: false` 关闭。 |
-| 设置面板 tab | `settings.plugins.tab` | 设置 → 插件 → 「我的插件仓库」 |
+```
+logoRow（品牌） → New Session 按钮 → panelList（本插件的入口行） → workspaces → foot
+```
 
-> **侧边栏按钮是自绘的内联 SVG**，不依赖宿主的图标集。
+入口行与面板本体是**两个登记项、同一个身份**：
+
+| 登记项 | 席位 | 字段 | 作用 |
+|--------|------|------|------|
+| 入口行 | `sidebar.panellist`（list / root） | `id` | 侧边栏那一行（图标 + label），位置就在 New Session 下方 |
+| 面板本体 | `main`（keyed / root） | `key` | 主界面工作区里实际渲染的面板 |
+
+> **两处的值必须是同一个字符串**（`PANEL_ID = 'plugin-repo'`）。ui-layout 的 `MainPanelId`
+> 注释原话是 "Identity shared by a sidebar panel entry and its main-slot occupant"。
+> 缺任一侧都是静默失效：**有行无本体**时点击走 shell 的 `ctx.layout.selectPanel(id)`，
+> 它发现 `main` 没有注册就 **直接 throw** 并保留原选中态 —— 用户看到的就是「点了没反应」。
+> `scripts/test-sidebar.mjs` 钉住这条，`scripts/test-sidebar-negatives.mjs` 证明它不是空转。
+
+> **点击不需要注册方写 `onClick`**：`PanelRow` 自己接 `selectPanel(id)`，注册方只在
+> `main` 里 register 本体即可。`main` 是 root 作用域，**不绑会话** —— 全局面板本来就不该绑。
+
+> ⚠️ **不要注册到 `sidebar` 槽**（本插件曾经就是这么写的，所以入口只在设置里找得到）。
+> `sidebar` 是 `single` 且已被 ui-sidebar 的 SidebarRoot 占用，ui-layout 的 `SlotMap` 注释原文：
+> "registering here **replaces the navigation column outright** rather than adding to it,
+> and the seats it declares disappear with it." —— 往那里注册是**替换整根导航栏**。
+
+> **入口行是自绘的内联 SVG**，不依赖宿主的图标集。
 > 原因：把图标名（如 `icon: 'package'`）交给宿主去渲染，等于把「宿主认不认这个名字」
 > 变成运行时未知数——名字写错**不会报错**，只会静默显示空白，是最难发现的一类失效。
-> SVG 用 `currentColor` 描边，因此会自动跟随侧边栏的深浅色主题。
+> SVG 用 `currentColor` 描边，因此会自动跟随侧边栏的深浅色主题与选中态。
+> 行里的**文字由 ui-sidebar 用 `label` 渲染**，插件只画图标；窄条（收起）态下也不会溢出。
 
-### 侧边栏按钮配置
+### 入口开关
 
 ```yaml
 - insert:
     - id: plugin-repo
       name: 'dsh-plugin-repo-manager'
       config:
-        showSidebarButton: true    # false 则完全不注册该槽位
-        sidebarTitle: '插件仓库'    # hover 提示 / 无障碍标签；留空用语言字典默认值
+        showSidebarEntry: true     # false 则**两项都不注册**（行与本体一起消失）
+        sidebarTitle: '插件仓库'    # hover 提示 / 无障碍名 / 展开态文字；留空用语言字典默认值
 ```
 
-`showSidebarButton` 也可用环境变量控制：`DSH_PLUGIN_SHOW_SIDEBAR=false`。
+`showSidebarEntry` 也可用环境变量控制：`DSH_PLUGIN_SHOW_SIDEBAR_ENTRY=false`。
+
+> **旧键名 `showSidebarButton` 仍然兼容**（新键优先），旧环境变量 `DSH_PLUGIN_SHOW_SIDEBAR` 同理。
+> 入口从「按钮」变成「面板行」后旧名不再准确，但**改名的唯一风险是「照着旧文档改了旧键、
+> 毫无反应、也不报错」** —— 所以两个键都认。
 
 > 布尔解析刻意宽容：`false` / `"false"` / `"0"` / `"no"` / `"off"` 都识别为关闭。
 > **不用 `Boolean(raw)`** —— 字符串 `"false"` 在 JS 里是**真值**，那样写会导致
 > 「配置里关掉了、实际却还显示」这种最难排查的失效。无法识别的值一律回退到默认
-> （显示），避免配置拼错把按钮静默弄丢。
+> （显示），避免配置拼错把入口静默弄丢。
+>
+> 这份宽容解析**只在服务端 half 有一处实现**（`resolveShowSidebarEntry`，已导出），
+> 客户端只消费归一化后的布尔值 —— 同一判据写两份必然漂移。
+> `scripts/test-sidebar.mjs` 直接 `import` 构建产物来断言它，不重写一份。
 
-> 关闭时是**整个不注册槽位**，而不是「注册后渲染 `null`」。渲染 `null` 仍会占位，
+> 关闭时是**两个登记项都不注册**，而不是「注册后渲染 `null`」。渲染 `null` 仍会占位，
 > 仍可能被宿主画出分隔线或引起布局抖动。
 
 ## 排查：面板空白、只有一个「重试」按钮
@@ -77,7 +107,7 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
     "skillsDir": "/root/.dsh/skills",
     "skillsExists": true
   },
-  "config": { "pollInterval": 3000, "showSidebarButton": true, "sidebarTitle": "插件仓库" },
+  "config": { "pollInterval": 3000, "showSidebarEntry": true, "sidebarTitle": "插件仓库" },
   "selfTest": { "ok": true, "pathGuard": "ok", "moduleSystem": "esm" }
 }
 ```
@@ -97,6 +127,9 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 | `ok:true` 且 `repoEntryCount:0` | 目录在但**没有合法插件子目录** | 确认 `repoDir` 指向 `DSHPlugins/skills`（含插件子目录那层），不是仓库根 |
 | `ok:true` 且 `skillsExists:false` | 安装目标目录不存在 | 确认 `skillsDir` 与 DSH 实际扫描目录一致（见下方「skillsDir 陷阱」） |
 | `selfTest.ok:false` | **路径防护在当前环境失效** | 看 `pathGuard` 的异常；多半是 ESM/CJS 混用（见下方「ESM 陷阱」） |
+| `config.showSidebarEntry:false` | 入口被配置关掉了 | 改 `cordis.patch.yml`（或旧键 `showSidebarButton`）后重启 |
+| `config.showSidebarEntry:true` 但侧边栏没有那一行 | 宿主没渲染 `sidebar.panellist` 席位，或插件版本太旧 | 确认已装的是 1.3.0+（1.2.x 注册的是整栏 `sidebar`，**注定不显示**）；看启动日志 |
+| 侧边栏行点了没反应 | 行注册了、但 `main` 里没有同 id 的本体 | `selectPanel(id)` 遇到未注册的 main key 会 **throw**；两端 id 必须逐字相同，跑 `npm test` |
 
 ### 点「安装 / 卸载」没反应（2026-09-20 已修）
 
@@ -302,8 +335,7 @@ npm run typecheck    # 0 error
 1. 重启 DSH
 2. 打开 `http://127.0.0.1:2298/`
 3. 两种进法任选：
-   - **主界面左侧竖条** → 点 📦 箱子图标
-   - **设置** → **插件** → 「我的插件仓库」tab
+   - **主界面左侧栏** → New Session 按钮正下方的 📦 「插件仓库」行
 
 ## 配置
 
@@ -317,7 +349,7 @@ npm run typecheck    # 0 error
       name: 'dsh-plugin-repo-manager'
       config:
         repoDir: '/path/to/your/plugins'
-        showSidebarButton: true
+        showSidebarEntry: true
 ```
 
 > **不要给 `skillsDir` 写 `~` 开头的路径**（详见上方排查章节）。
@@ -328,8 +360,8 @@ npm run typecheck    # 0 error
 | `repoDir` | `DSH_PLUGIN_REPO_DIR` | `/vol1/1000/AI/DSHPlugin/skills` | 仓库目录（按类型分层的根，通常是 `DSHPlugins/skills`） |
 | `skillsDir` | `DSH_PLUGIN_SKILLS_DIR` | `$DSH_HOME/skills`（无 `DSH_HOME` 时 `~/.dsh/skills`） | 技能安装目标目录。**留空让插件推导**；要写死就用绝对路径 |
 | `pollInterval` | `DSH_PLUGIN_POLL_INTERVAL` | `3000` | 自动刷新间隔（毫秒） |
-| `showSidebarButton` | `DSH_PLUGIN_SHOW_SIDEBAR` | `true` | 是否显示主界面侧边栏按钮 |
-| `sidebarTitle` | `DSH_PLUGIN_SIDEBAR_TITLE` | 语言字典默认值 | 侧边栏按钮提示文案 |
+| `showSidebarEntry` | `DSH_PLUGIN_SHOW_SIDEBAR_ENTRY` | `true` | 是否显示侧边栏入口行（连带面板本体）。旧键 `showSidebarButton` / 旧 env `DSH_PLUGIN_SHOW_SIDEBAR` 仍兼容，新键优先 |
+| `sidebarTitle` | `DSH_PLUGIN_SIDEBAR_TITLE` | 语言字典默认值 | 入口行的提示文案（hover / 无障碍名 / 展开态文字） |
 
 优先级：`cordis.patch.yml` 的 `config` > 环境变量 > 默认值。
 
@@ -342,7 +374,7 @@ dsh-plugin-repo-manager/
 │   ├── types/
 │   │   └── host.d.ts       # DSH 宿主包类型声明桩（仅类型检查用）
 │   └── client/
-│       ├── index.tsx       # Client 注册（侧边栏按钮 + 设置 tab，含 JSX 故为 .tsx）
+│       ├── index.tsx       # Client 注册（sidebar.panellist 入口行 + main 面板本体，含 JSX 故为 .tsx）
 │       ├── locales.ts      # 国际化字典
 │       └── PluginRepoPanel.tsx  # React 面板组件
 ├── dist/                   # ★ 服务端编译产物（入库，安装时使用）
@@ -350,7 +382,7 @@ dsh-plugin-repo-manager/
 │   └── index.d.ts
 ├── client/
 │   └── client.js           # ★ 客户端 bundle（入库，由 generate-client.mjs 生成）
-├── cordis.patch.yml        # Cordis 挂载配置（含侧边栏开关）
+├── cordis.patch.yml        # Cordis 挂载配置（含入口开关 showSidebarEntry）
 ├── manifest.json           # 插件元数据（版本号来源之一）
 ├── package.json            # main → dist/index.js
 ├── tsconfig.json           # 类型检查配置（noEmit）
@@ -361,7 +393,8 @@ dsh-plugin-repo-manager/
     ├── test-isnewer.mjs                 # 版本比较单元测试
     ├── test-install-update.mjs          # 安装/更新流程端到端测试
     ├── test-paths.mjs                   # 路径解析测试
-    ├── test-sidebar.mjs                 # 侧边栏配置与注册测试
+    ├── test-sidebar.mjs                 # 入口：席位/成对/开关（布尔解析直接跑 dist 产物）
+    ├── test-sidebar-negatives.mjs       # 上者的反向回归（注入 10 种真实错误，证其非空转）
     ├── test-client-parity.mjs           # 源码 / bundle 副本一致性（含布局尺寸、locale 字典）
     ├── test-client-parity-negatives.mjs # 上者的反向回归（注入漂移，证其非空转）
     ├── test-route-prefix.mjs            # 路由前缀归一化
@@ -371,9 +404,10 @@ dsh-plugin-repo-manager/
     └── test-orphans.mjs                 # 孤立已装技能（DSH 里有、仓库里已没有）
 ```
 
-> **这里刻意不写每套的例数** —— 会漂：本行曾长期写着「九套，共 233 例」，
-> 实际早已是 11 套 286 例（且当时还漏列 `test-orphans.mjs`）。
-> 例数请直接看 `npm test` 的逐套输出。
+> **这里刻意不写每套的例数、也不写套数** —— 会漂：本行曾长期写着「九套，共 233 例」，
+> 实际早已是 11 套 286 例（且当时还漏列 `test-orphans.mjs`）；现在又多了
+> `test-sidebar-negatives.mjs`，若把「12 套」写进来就又开始漂了。
+> 套件清单看 `package.json` 的 `test` 脚本，例数看 `npm test` 的逐套输出。
 
 ### HTTP API
 

@@ -16,7 +16,7 @@
  *   4. 卸载失败可见性 —— 后端抛错、前端只在控制台记录 → 「点了没反应」
  *   5. **布局尺寸值** —— 改了 src 那份、漏改生成器 → 「开发时看到的」与
  *      「用户实际跑到的」尺寸不同
- *   6. locale 字典（第 11 节）—— 同一个 `settings.pluginRepo` 命名空间两份字典
+ *   6. locale 字典（第 11 节）—— 同一个 `pluginRepo` 命名空间两份字典
  *      键集与文案都不一样：src 多 6 个键、英文卸载确认文案还带着与中文矛盾的
  *      "This action cannot be undone."
  *
@@ -79,10 +79,12 @@ bothHave('先判 r.ok / response.ok 再解析',
 bothHave('错误信息含 HTTP 状态码',
   /HTTP\s*'?\s*\+\s*r\.status|HTTP \$\{response\.status\}/)
 
-console.log('\n[3. 侧边栏显隐（第 2 次漂移）]')
-bothHave('读取 showSidebarButton', /showSidebarButton/, { src: indexSrc })
+console.log('\n[3. 侧边栏入口开关（第 2 次漂移；入口的槽位形态见 test-sidebar.mjs，此处不重复）]')
+// 2026-09-24：入口从「设置 tab + 侧边栏按钮」迁到「sidebar.panellist 行 + main 本体」，
+// 配置键随之改名为 showSidebarEntry（旧键 showSidebarButton 仍兼容读取）。
+bothHave('读取 showSidebarEntry', /showSidebarEntry/, { src: indexSrc })
+bothHave('仍兼容旧键 showSidebarButton（改名的唯一风险是旧键静默失效）', /showSidebarButton/, { src: indexSrc })
 bothHave('用 !== false 判断（缺省即显示）', /!== false/, { src: indexSrc })
-bothHave('注册被 if(showSidebarButton...) 包住', /if\s*\(\s*showSidebarButton\b/, { src: indexSrc })
 bothHave('自绘 SVG 图标（不依赖宿主图标集）', /PackageIcon/, { src: indexSrc })
 bothHave('图标用 currentColor 跟随主题', /currentColor/, { src: indexSrc })
 
@@ -101,7 +103,7 @@ for (const ep of endpoints) {
 
 console.log('\n[5. 产物已重新生成（bundle 应包含最新生成器内容）]')
 // bundle 由生成器产出，抽样几个只在生成器里出现的新标记
-for (const marker of ["HTTP ' + r.status", 'PackageIcon', 'showSidebarButton !== false']) {
+for (const marker of ["HTTP ' + r.status", 'PackageIcon', "inject('sidebar.panellist'"]) {
   const inGen = bundleGen.includes(marker)
   const inBundle = clientJs.includes(marker)
   if (inGen && inBundle) { pass++; console.log(`  ✓ bundle 含 "${marker}"`) }
@@ -189,7 +191,7 @@ check('产物渲染了 plugin.repoDirName', /plugin\.repoDirName/.test(clientJs)
 
 console.log('\n[11. locale 字典：同一命名空间的两份字典必须逐键一致（第 6 次漂移候选）]')
 // 起因（2026-09-24）：`src/client/locales.ts` 与 `generate-client.mjs` 内嵌的字典
-// 是**同一个 locale 命名空间 `settings.pluginRepo`** 的两份注册副本 —— 两边各
+// 是**同一个 locale 命名空间 `pluginRepo`** 的两份注册副本 —— 两边各
 // `locale.register(NS, {zh, en})` 一次，宿主拿到哪份取决于哪份实现被加载。实测两份
 // 早已漂移：src 多出 6 个键（uninstallSuccess / pollIntervalHint 等），英文卸载确认
 // 文案一边是 `Uninstall "{{name}}"?'`、一边是
@@ -237,7 +239,7 @@ const dicts = {
   'bundle en': parseDict(sliceBlock(clientJs, 'var en = {', '\n    };')),
 }
 
-// 空转防护：六个块都要解析出来，且键数不少于下限（当前 31 个）
+// 空转防护：六个块都要解析出来，且键数不少于下限（当前 30 个；tab 键随设置 tab 一起删除）
 const MIN_KEYS = 25
 for (const [name, dict] of Object.entries(dicts)) {
   check(`${name} 解析出 ≥ ${MIN_KEYS} 个键（实得 ${dict.size}）`, dict.size >= MIN_KEYS)

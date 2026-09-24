@@ -10,11 +10,10 @@ window.__ModuleLoader__.load({
 
     // Locale dictionaries
     // ⚠️ 与 src/client/locales.ts **必须逐字一致**（同一个 locale 命名空间
-    // settings.pluginRepo，两边各注册一次）。「不一致时以谁为准」的规则写在
+    // pluginRepo，两边各注册一次）。「不一致时以谁为准」的规则写在
     // src/client/locales.ts 顶部，此处不复述。scripts/test-client-parity.mjs 第 11 节逐键比对。
     // ⚠️ 本文件整体是**模板字符串**：注释里不能出现反引号和美元加花括号，否则会提前闭合。
     var zh = {
-      tab: '我的插件仓库',
       sidebar: '插件仓库',
       loading: '加载中...',
       error: '加载失败，请重试',
@@ -48,7 +47,6 @@ window.__ModuleLoader__.load({
     };
 
     var en = {
-      tab: 'My Plugin Repo',
       sidebar: 'Plugin Repo',
       loading: 'Loading...',
       error: 'Failed to load, please retry',
@@ -334,7 +332,7 @@ window.__ModuleLoader__.load({
     // 属于「看着像没问题、其实没生效」的失效。自绘 SVG 不依赖宿主图标集，
     // currentColor 还能自动跟随侧边栏深浅色主题。
     function PackageIcon(props) {
-      var size = (props && props.size) || 20;
+      var size = (props && props.size) || 18;
       return jsxRuntime.jsx('svg', {
         width: size, height: size, viewBox: '0 0 24 24',
         fill: 'none', stroke: 'currentColor',
@@ -350,49 +348,56 @@ window.__ModuleLoader__.load({
 
     // Apply
     function apply(ctx) {
-      var NS = 'settings.pluginRepo';
-      var SIDEBAR_SLOT_ID = 'plugin-repo-btn';
-      var TAB_SLOT_ID = 'plugin-repo';
+      // 命名空间不再带 settings. 前缀：面板已经不在设置里了（见 src/client/index.tsx 顶部）。
+      var NS = 'pluginRepo';
+      // 面板 ID —— 侧边栏入口行的 id 与 main keyed 槽的 key **必须逐字相同**。
+      // 缺任一侧都是静默失效：有行无本体时 shell 的 selectPanel 会直接 throw，
+      // 用户看到的就是「点了没反应」。详见 src/client/index.tsx 的 PANEL_ID 注释。
+      var PANEL_ID = 'plugin-repo';
       var config = (ctx.get && ctx.get('pluginRepoConfig')) || {};
       var pollInterval = config.pollInterval || 3000;
       var repoDir = config.repoDir || '/vol1/1000/AI/DSHPlugin/skills';
       var skillsDir = config.skillsDir || '';
-      // 默认 true：配置缺失时保持旧行为，不能因为宿主没注入配置就把按钮弄丢。
-      var showSidebarButton = config.showSidebarButton !== false;
-      var sidebarTitle = config.sidebarTitle || '';
+      // 默认 true：配置缺失时不能把入口弄丢。
+      // 这里**只认服务端归一化后的布尔值** —— 字符串的宽容解析（"false" 要判成 false）
+      // 只在服务端 half 有一份（dist/index.js 导出的 resolveShowSidebarEntry，
+      // 由 scripts/test-sidebar.mjs 直接 import 产物断言）。客户端再写一份必然漂移。
+      // 读旧键是为了容忍「两半版本混装」：老服务端下发的字段名是 showSidebarButton。
+      var rawShowSidebarEntry = config.showSidebarEntry;
+      if (rawShowSidebarEntry === undefined) rawShowSidebarEntry = config.showSidebarButton;
+      var showSidebarEntry = rawShowSidebarEntry !== false;
 
       ctx.effect(function() { return ctx.locale && ctx.locale.register(NS, {zh:zh, en:en}); }, 'dsh-plugin-repo-manager: dictionaries');
       var t = ctx.locale && ctx.locale.bind ? ctx.locale.bind(NS) : function(k) { return zh[k] || k; };
-      var title = sidebarTitle || t('sidebar');
+      var sidebarTitle = config.sidebarTitle || '';
+      // 在函数里取文案：切换语言时 sidebar 会重新解析 label，这样能拿到新语言的文字。
+      var label = function() { return sidebarTitle || t('sidebar'); };
 
-      if (ctx.slots && ctx.slots.inject) {
-        ctx.slots.inject('settings.plugins.tab', function() {
-          return ctx.slots.register(
-            { name:'settings.plugins.tab', id:TAB_SLOT_ID, order:20, label:function(){return t('tab');}, locale:NS },
-            function(props) { return jsxRuntime.jsx(PluginRepoPanel, {apiBase:'/api/plugin-repo', pollInterval:pollInterval, repoDir:repoDir, skillsDir:skillsDir}); }
-          );
-        });
-      }
-
-      // 主界面侧边栏（图标按钮）。
-      // false 时整个**不注册**，而不是「注册后渲染 null」—— 渲染 null 仍会占位，
+      // false 时两项**都不注册**，而不是「注册后渲染 null」—— 渲染 null 仍会占位，
       // 仍可能被宿主画出分隔线或引起布局抖动，只有不注册才是真正拿掉。
-      if (showSidebarButton && ctx.slots && ctx.slots.inject) {
-        ctx.slots.inject('sidebar', function() {
-          return ctx.slots.register(
-            { name:'sidebar', id:SIDEBAR_SLOT_ID, order:100, icon:'package', label:function(){return title;} },
-            function(props) {
-              return jsxRuntime.jsx('button', {
-                type: 'button',
-                title: title,
-                'aria-label': title,
-                onClick: function(){ if(props.navigateTo) props.navigateTo('settings.plugins.tab.' + TAB_SLOT_ID); },
-                style: { display:'flex', alignItems:'center', justifyContent:'center', width:'100%', padding:'6px', border:'none', background:'transparent', color:'inherit', cursor:'pointer', borderRadius:'5px' }
-              }, jsxRuntime.jsx(PackageIcon, {}));
-            }
-          );
-        });
-      }
+      if (!showSidebarEntry || !ctx.slots || !ctx.slots.inject) return;
+
+      // ① 侧边栏入口行 —— 位置就在 New Session 按钮正下方（ui-sidebar 的 panellist 席位）。
+      // 不能注册到 sidebar 槽：那是 single 且已被 SidebarRoot 占用，往那里注册是
+      // **替换整根导航栏**而不是添加（ui-layout 的 SlotMap 注释原话），注定不显示。
+      // owner props 是 { size, active }；整行的点击由 shell 调 selectPanel(id) 处理，
+      // 所以这里不写 onClick、也不画文字（文字由 sidebar 用 label 渲染）。
+      ctx.slots.inject('sidebar.panellist', function() {
+        return ctx.slots.register(
+          { name:'sidebar.panellist', id:PANEL_ID, order:100, label:label },
+          function(props) { return jsxRuntime.jsx(PackageIcon, { size: (props && props.size) || 18 }); }
+        );
+      });
+
+      // ② 面板本体 —— 主界面工作区。main 是 keyed 槽，注册字段是 key（不是 id）：
+      // ui-layout 判它是否已注册用的是 entry.options.key === id。
+      // 用同一个 PANEL_ID 让「侧边栏那一行」和「这个本体」成为同一个身份。
+      ctx.slots.inject('main', function() {
+        return ctx.slots.register(
+          { name:'main', key:PANEL_ID },
+          function() { return jsxRuntime.jsx(PluginRepoPanel, {apiBase:'/api/plugin-repo', pollInterval:pollInterval, repoDir:repoDir, skillsDir:skillsDir}); }
+        );
+      });
     }
 
     module.exports = { apply: apply, PluginRepoPanel: PluginRepoPanel };

@@ -25,8 +25,9 @@
   - 产品设计 → 开发拆单实现 ∥ UI/UX 设计（界面/动效/视觉反馈）→ 联调与体验调优 → QA → BUG 修复 → 复盘沉淀
   - 两侧一致性由 `scripts/tests/test-skill-parity.py` 逐项把关（差异只能落在声明的映射表内），
     并有反向回归 `test-skill-parity-negatives.py` 证明该守卫不会空转
-- **dsh-plugin-repo-manager**（面板） - 主界面侧边栏图标按钮 + 设置面板 tab 里的「我的插件仓库」
-  - 侧边栏按钮入口 / Skill 列表展示 / 安装卸载（带确认）/ 批量操作 / 轮询刷新（默认 3 秒）
+- **dsh-plugin-repo-manager**（面板） - 侧边栏入口行（New Session 下方）打开主界面工作区的「插件仓库」面板
+  - 入口注册在 `sidebar.panellist`，本体注册在 `main`（同一 id，缺本体则点击 throw）
+  - Skill 列表展示 / 安装卸载（带确认）/ 批量操作 / 轮询刷新（默认 3 秒）
   - **清理 DSH 孤立技能**：列出「DSH 里装着、仓库中已不存在」的技能（标为「仓库中已不存在」）
     并可直接卸载 —— 只删 DSH 侧，仓库永远只读
 - **lucky-api**（技能） - 调用自建 Lucky 实例的 HTTP API
@@ -241,7 +242,7 @@ DSHPlugins/
 
 | 功能 | 状态 | 说明 |
 |------|------|------|
-| 侧边栏按钮 | ✅ | 注册到 sidebar 槽 |
+| 侧边栏入口 | ✅ | 注册到 `sidebar.panellist`（New Session 下方）+ `main` 本体；**不要**用整栏 `sidebar` 槽（那是替换整根导航栏） |
 | Skill 列表 | ✅ | 从仓库目录读取 |
 | 安装/卸载 | ✅ | 带确认对话框 |
 | 清理 DSH 孤立技能 | ✅ | 列出「DSH 里装着但仓库中已不存在」的技能，可直接卸载（**只删 DSH 侧，仓库不受影响**） |

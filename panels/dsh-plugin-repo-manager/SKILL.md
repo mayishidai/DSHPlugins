@@ -1,7 +1,7 @@
 ---
 name: dsh-plugin-repo-manager
-description: "DSH web 面板插件：在设置页管理自建插件仓库，支持扫描、安装、卸载、版本检测与一键更新（更新前自动留档备份）；并列出「DSH 里装着但仓库中已不存在」的技能，让 DSH 侧也能被清理干净。"
-whenToUse: "当需要在 DSH 设置面板中浏览/安装/更新自建插件仓库（DSHPlugins）里的插件时；或需要清理 DSH 里已从仓库移除的技能时。"
+description: "DSH web 面板插件：在主界面侧边栏（新会话下方）打开面板管理自建插件仓库，支持扫描、安装、卸载、版本检测与一键更新（更新前自动留档备份）；并列出「DSH 里装着但仓库中已不存在」的技能，让 DSH 侧也能被清理干净。"
+whenToUse: "当需要在 DSH 侧边栏「插件仓库」入口浏览/安装/更新自建插件仓库（DSHPlugins）里的插件时；或需要清理 DSH 里已从仓库移除的技能时。"
 invocation:
   modelInvocable: false
   userInvocable: true
@@ -9,7 +9,7 @@ invocation:
 
 # dsh-plugin-repo-manager（面板插件）
 
-在 DSH 设置页以面板形式管理自建插件仓库：扫描仓库目录、安装/卸载插件、检测版本更新并一键更新；
+在 DSH 主界面工作区以面板形式管理自建插件仓库：扫描仓库目录、安装/卸载插件、检测版本更新并一键更新；
 并列出「DSH 里装着但仓库中已不存在」的技能，让 DSH 侧也能被清理干净。
 
 ## 这是面板型插件（不是技能）
@@ -21,26 +21,33 @@ invocation:
 | 客户端入口 | `client/client.js`（自包含 bundle，已入库） |
 | 挂载 | `cordis.patch.yml` |
 
-它由 DSH 运行时加载，**不通过技能加载器调用**（`modelInvocable: false`）。人的入口是主界面侧边栏图标或设置面板 UI。
+它由 DSH 运行时加载，**不通过技能加载器调用**（`modelInvocable: false`）。人的入口是主界面侧边栏里、New Session 按钮正下方那一行。
 
 **装了就能用**：产物已编译并提交进 git，目标机不需要 npm 或编译工具链。
 
 ## 用法
 
-**两个入口，两处渲染同一个面板：**
+**一个入口：**
 
 1. 重启 DSH
 2. 打开 `http://127.0.0.1:2298/`
-3. 任选其一：
-   - **主界面左侧竖条** → 点 📦 箱子图标（**1 次点击**，最直接）
-   - 设置 → 插件 → 「我的插件仓库」tab
+3. 点主界面**左侧栏 New Session 按钮正下方**的 📦「插件仓库」行 ——
+   面板会开到**主界面工作区**，再点一次该行即回到会话界面
 
-侧边栏按钮由 `showSidebarButton` 控制（默认开）：
-`cordis.patch.yml` 里设 `false`，或环境变量 `DSH_PLUGIN_SHOW_SIDEBAR=false`。
-设为 `false` 时**完全不注册该槽位**，不会留空占位。
+席位是 `sidebar.panellist`（ui-sidebar 为「全局面板入口」保留的子槽），面板本体登记在
+`main` 槽。**两处的 id 必须是同一个字符串**（`PANEL_ID`）：有行无本体时点击会
+`throw`（`selectPanel: main panel "X" is not registered`），表现为「点了没反应」。
+**不要注册到 `sidebar` 槽** —— 那是 `single` 且已被 SidebarRoot 占用，往那里注册是
+替换整根导航栏（1.2.x 就是这么写的，所以入口只在设置里找得到）。
 
-按钮图标是**自绘内联 SVG**（`currentColor` 描边，自动跟随主题），不依赖宿主图标集——
-宿主认不认某个图标名是运行时未知数，写错不报错、只静默空白。
+入口由 `showSidebarEntry` 控制（默认开）：
+`cordis.patch.yml` 里设 `false`，或环境变量 `DSH_PLUGIN_SHOW_SIDEBAR_ENTRY=false`。
+设为 `false` 时**两个登记项都不注册**，不会留空占位。旧键 `showSidebarButton` /
+旧 env `DSH_PLUGIN_SHOW_SIDEBAR` 仍兼容（新键优先）。
+
+图标是**自绘内联 SVG**（`currentColor` 描边，自动跟随主题与选中态），不依赖宿主图标集——
+宿主认不认某个图标名是运行时未知数，写错不报错、只静默空白。行里的**文字由 ui-sidebar
+用 `label` 渲染**，插件不画文字。
 
 ## 安装 / 卸载（不污染 DSH 源码）
 
@@ -178,7 +185,7 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 直接比对两份的尺寸数值集合拦下。
 
 关键值：外层 `12px 14px` / 单元格 `6px` / 表头 `5px 6px` / 按钮 `4px 10px` /
-表格 `tableLayout: fixed` / 设置面板三项并排。详见 `README.md`。
+表格 `tableLayout: fixed` / 面板内设置区三项并排。详见 `README.md`。
 
 ## 版本与更新
 
@@ -196,8 +203,8 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 | `repoDir` | `DSH_PLUGIN_REPO_DIR` | `/vol1/1000/AI/DSHPlugin/skills` | 仓库目录（按类型分层的根） |
 | `skillsDir` | `DSH_PLUGIN_SKILLS_DIR` | `$DSH_HOME/skills` | 技能安装目标目录。**留空让插件推导**；要写死只能用绝对路径（不能 `~` 开头） |
 | `pollInterval` | `DSH_PLUGIN_POLL_INTERVAL` | `3000` | 自动刷新间隔（毫秒） |
-| `showSidebarButton` | `DSH_PLUGIN_SHOW_SIDEBAR` | `true` | 是否显示主界面侧边栏按钮 |
-| `sidebarTitle` | `DSH_PLUGIN_SIDEBAR_TITLE` | 语言字典默认值 | 侧边栏按钮提示文案 |
+| `showSidebarEntry` | `DSH_PLUGIN_SHOW_SIDEBAR_ENTRY` | `true` | 是否显示侧边栏入口行（连带面板本体）。旧键 `showSidebarButton` / 旧 env `DSH_PLUGIN_SHOW_SIDEBAR` 仍兼容 |
+| `sidebarTitle` | `DSH_PLUGIN_SIDEBAR_TITLE` | 语言字典默认值 | 入口行提示文案 |
 
 优先级：`cordis.patch.yml` 的 `config` > 环境变量 > 默认值。
 
@@ -211,7 +218,7 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
         repoDir: '/path/to/your/skills'
         skillsDir: '~/.dsh/skills'
         pollInterval: 3000
-        showSidebarButton: true
+        showSidebarEntry: true
         sidebarTitle: '插件仓库'
 ```
 
@@ -219,8 +226,10 @@ curl -s http://127.0.0.1:2298/api/plugin-repo/_health | python3 -m json.tool
 >
 > `skillsDir` / `repoDir` 支持 `~`，会被自动展开为家目录（不会写成字面量 `~` 目录）。
 >
-> `showSidebarButton` 的布尔解析宽容：`false` / `"0"` / `"no"` / `"off"` 都算关闭；
-> **不认识的写法一律回退到默认（显示）**，避免配置拼错把按钮静默弄丢。
+> `showSidebarEntry` 的布尔解析宽容：`false` / `"0"` / `"no"` / `"off"` 都算关闭；
+> **不认识的写法一律回退到默认（显示）**，避免配置拼错把入口静默弄丢。
+> 这份宽容解析**只在服务端 half 有一处实现**（`resolveShowSidebarEntry`，已导出），
+> 客户端只消费归一化后的布尔值，`test-sidebar.mjs` 直接 import 产物断言它。
 
 ## 开发速查
 

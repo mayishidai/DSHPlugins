@@ -13,11 +13,6 @@ declare module '@deepseek-ai/dsh-client-locale/client' {
   export default _default
 }
 
-declare module '@deepseek-ai/dsh-client-ui-settings/client' {
-  const _default: unknown
-  export default _default
-}
-
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   const _default: unknown
   export default _default

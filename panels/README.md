@@ -33,7 +33,7 @@ panels/<name>/
 
 | 面板 | 说明 |
 |---|---|
-| [dsh-plugin-repo-manager](dsh-plugin-repo-manager/) | 主界面侧边栏图标按钮 + 设置面板 tab：列技能、装/卸、版本检测与一键更新 |
+| [dsh-plugin-repo-manager](dsh-plugin-repo-manager/) | 侧边栏入口行（`sidebar.panellist`，New Session 下方）打开主界面工作区面板：列技能、装/卸、版本检测与一键更新 |
 
 ## 注意
 

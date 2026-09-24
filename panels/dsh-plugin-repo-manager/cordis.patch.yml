@@ -23,8 +23,13 @@
         # 确实需要写死时（例如 DSH 没有导出 DSH_HOME），取消下面这行注释并改成真实路径：
         # skillsDir: '/vol2/@appdata/deepseek.harness/dsh-data/skills'
         pollInterval: 3000
-        # 主界面左侧竖条上的图标按钮；点它直接打开「我的插件仓库」面板。
-        # 设为 false 则完全不注册该槽位（不是渲染成空占位）。
-        showSidebarButton: true
-        # 按钮的 hover 提示与无障碍标签；留空则用当前语言字典里的默认文案。
+        # 侧边栏入口：注册到 ui-sidebar 的 `sidebar.panellist` 席位（位置就在左侧栏
+        # New Session 按钮正下方），面板本体渲染在主界面工作区（`main` 槽）。
+        # 设为 false 则两项**都不注册**（不是渲染成空占位）。
+        #
+        # ⚠️ 旧键名是 showSidebarButton，仍然兼容读取（新键优先）—— 入口是「面板行」
+        # 而非按钮了，但旧配置不会因此失效。
+        showSidebarEntry: true
+        # 入口行的标题；同时用于 hover 提示、无障碍名和侧边栏展开态的文字。
+        # 留空则用当前语言字典里的默认文案。
         sidebarTitle: '插件仓库'

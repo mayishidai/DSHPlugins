@@ -22,9 +22,9 @@ const DEFAULT_CONFIG = {
     skillsDir: () => join(process.env.DSH_HOME || join(process.env.HOME || '', '.dsh'), 'skills'),
     /** 轮询间隔（毫秒） */
     pollInterval: 3000,
-    /** 是否启用侧边栏按钮 */
-    showSidebarButton: true,
-    /** 侧边栏按钮标题 */
+    /** 是否启用侧边栏入口行（sidebar.panellist 那一行 + 主界面工作区的面板本体） */
+    showSidebarEntry: true,
+    /** 侧边栏入口行的标题（hover 提示 / 无障碍名 / 展开态文字） */
     sidebarTitle: '插件仓库',
 };
 /**
@@ -198,22 +198,40 @@ function resolvePollInterval(ctx) {
         ?? 3000;
 }
 /**
- * 解析「是否显示主界面侧边栏按钮」。
+ * 解析「是否显示侧边栏入口行」。
  *
- * 优先级：`config.showSidebarButton` > `DSH_PLUGIN_SHOW_SIDEBAR` > 默认 true。
+ * 优先级：
+ *   `config.showSidebarEntry`（新键）
+ *   > `config.showSidebarButton`（**旧键，兼容保留**）
+ *   > `DSH_PLUGIN_SHOW_SIDEBAR_ENTRY`（新环境变量）
+ *   > `DSH_PLUGIN_SHOW_SIDEBAR`（旧环境变量，兼容保留）
+ *   > 默认 true
+ *
+ * 为什么要认旧键：入口从「设置 tab + 侧边栏按钮」迁到「侧边栏面板行 + 主界面工作区」
+ * 之后，旧键名 `showSidebarButton` 不再准确（它已经不是一个 button 了）。改名本身没风险，
+ * **唯一的风险是「用户照着旧文档改了旧键、毫无反应、也不报错」** —— 那正是本仓库
+ * 反复记录的一类静默失效。所以两个键都认，新键优先。
  *
  * 布尔解析刻意宽容：配置文件（YAML/JSON）与环境变量都只能给字符串，
  * `"false"` / `"0"` / `"no"` / `"off"` 都必须识别为 false —— 若用
  * `Boolean(raw)` 判断，字符串 `"false"` 是**真值**，会导致「在配置里关掉、
  * 实际却仍然显示」这种最难排查的失效。
- * 不认识的写法一律回退到默认值，避免拼错配置项把按钮弄丢。
+ * 不认识的写法一律回退到默认值，避免拼错配置项把入口弄丢。
+ *
+ * ⚠️ 这是该判据**唯一的实现**。客户端 half 只消费这里归一化出来的布尔值，
+ * 不再自己解析字符串（否则就是「同一判据两处实现」，必然漂移）。
+ * `scripts/test-sidebar.mjs` 直接 `import` 构建产物来断言本函数，不重写一份。
  */
-function resolveShowSidebarButton(ctx) {
+export function resolveShowSidebarEntry(ctx) {
     const config = ctx.get?.('config');
-    const fromConfig = config?.['showSidebarButton'];
-    const raw = (fromConfig !== undefined ? fromConfig : process.env['DSH_PLUGIN_SHOW_SIDEBAR']);
+    const fromConfig = config?.['showSidebarEntry'] !== undefined
+        ? config['showSidebarEntry']
+        : config?.['showSidebarButton'];
+    const raw = fromConfig !== undefined
+        ? fromConfig
+        : process.env['DSH_PLUGIN_SHOW_SIDEBAR_ENTRY'] ?? process.env['DSH_PLUGIN_SHOW_SIDEBAR'];
     if (raw === undefined || raw === null || raw === '')
-        return DEFAULT_CONFIG.showSidebarButton;
+        return DEFAULT_CONFIG.showSidebarEntry;
     if (typeof raw === 'boolean')
         return raw;
     if (typeof raw === 'number')
@@ -223,7 +241,7 @@ function resolveShowSidebarButton(ctx) {
         return true;
     if (['0', 'false', 'no', 'off'].includes(s))
         return false;
-    return DEFAULT_CONFIG.showSidebarButton;
+    return DEFAULT_CONFIG.showSidebarEntry;
 }
 /**
  * 解析侧边栏按钮标题（hover 提示 / 无障碍标签）。
@@ -642,7 +660,7 @@ export const API_PREFIX = '/api/plugin-repo';
  * 上一版就是这样漏掉了路由 bug 的回归。抽出来后 e2e 能直接打真实 handler。
  */
 export async function handleApiRequest(req, res, opts) {
-    const { repoDir, skillsDir, pollInterval, showSidebarButton, sidebarTitle, skillsDirSource } = opts;
+    const { repoDir, skillsDir, pollInterval, showSidebarEntry, sidebarTitle, skillsDirSource } = opts;
     const url = new URL(req.url || '', `http://${req.headers.host}`);
     const method = req.method || 'GET';
     // 兼容「宿主剥前缀」与「宿主保留全路径」两种约定，见 normalizeSubPath
@@ -688,7 +706,7 @@ export async function handleApiRequest(req, res, opts) {
                 // 「装的地方 ≠ DSH 扫的地方」的告警（没有问题时为 null）
                 skillsDirWarning: skills.warning,
                 skillsDirCandidates: skills.candidates,
-                config: { pollInterval, showSidebarButton, sidebarTitle },
+                config: { pollInterval, showSidebarEntry, sidebarTitle },
                 // 运行时自检：直接验证两个「会写盘」的操作在**当前模块系统下**可用。
                 // 曾经的 bug 是 ESM 里误用 require，导致 /uninstall 恒返回 INTERNAL_ERROR
                 // 而 HTTP 仍是 200 —— 前端表现为「点了没反应」。这里各跑一次纯路径判定
@@ -777,7 +795,7 @@ export async function apply(ctx) {
     const repoDir = resolveRepoDir(ctx);
     const { dir: skillsDir, source: skillsDirSource } = resolveSkillsDirWithSource(ctx);
     const pollInterval = resolvePollInterval(ctx);
-    const showSidebarButton = resolveShowSidebarButton(ctx);
+    const showSidebarEntry = resolveShowSidebarEntry(ctx);
     const sidebarTitle = resolveSidebarTitle(ctx);
     // 注册 HTTP API
     const webServer = ctx.get?.('webServer');
@@ -786,13 +804,13 @@ export async function apply(ctx) {
             kind: 'prefix',
             path: API_PREFIX,
             // 转发到唯一实现（见 handleApiRequest 的注释：抽出来是为了能被测到）
-            handler: (req, res) => handleApiRequest(req, res, { repoDir, skillsDir, pollInterval, showSidebarButton, sidebarTitle, skillsDirSource }),
+            handler: (req, res) => handleApiRequest(req, res, { repoDir, skillsDir, pollInterval, showSidebarEntry, sidebarTitle, skillsDirSource }),
         });
         console.log(`[plugin-repo-manager] HTTP API registered at /api/plugin-repo`);
         console.log(`[plugin-repo-manager] repoDir: ${repoDir}`);
         console.log(`[plugin-repo-manager] skillsDir: ${skillsDir}  (来源: ${skillsDirSource})`);
         console.log(`[plugin-repo-manager] pollInterval: ${pollInterval}ms`);
-        console.log(`[plugin-repo-manager] showSidebarButton: ${showSidebarButton}`);
+        console.log(`[plugin-repo-manager] showSidebarEntry: ${showSidebarEntry}`);
         // 启动即自检：skillsDir 一旦和 DSH 真正扫描的目录错位，
         // 「安装/卸载」就会变成「面板有反应、DSH 毫无变化」且不报任何错。
         // 把结论**在启动日志里喊出来**，不用等用户去翻 /_health。
@@ -814,7 +832,7 @@ export async function apply(ctx) {
         skillsDir,
         skillsDirSource,
         pollInterval,
-        showSidebarButton,
+        showSidebarEntry,
         sidebarTitle,
     });
 }

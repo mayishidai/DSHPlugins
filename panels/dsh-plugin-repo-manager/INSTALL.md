@@ -102,13 +102,18 @@ DSH 默认监听 `2298`。
 
 ### 3. 验证
 
-打开 `http://127.0.0.1:2298/`，两种进法任选：
+打开 `http://127.0.0.1:2298/`：
 
-- **主界面左侧竖条** → 点 📦 箱子图标（插件仓库面板）
-- 设置 → 插件 → 「我的插件仓库」tab
+- **主界面左侧栏** → 点 New Session 按钮正下方的 📦「插件仓库」行
 
-两者渲染同一个面板。侧边栏按钮若不想显示，在 `cordis.patch.yml` 里设
-`showSidebarButton: false`（或环境变量 `DSH_PLUGIN_SHOW_SIDEBAR=false`）后重启。
+面板会开到主界面工作区（再点一次该行回到会话界面）。位置由席位决定：
+`sidebar.panellist` 是 ui-sidebar 为「全局面板入口」保留的子槽，渲染顺序紧接
+New Session 之后。入口若不想显示，在 `cordis.patch.yml` 里设
+`showSidebarEntry: false`（或环境变量 `DSH_PLUGIN_SHOW_SIDEBAR_ENTRY=false`）后重启。
+
+> 若装的是 **1.2.x**：那一版注册的是整栏 `sidebar` 槽，ui-layout 会把它当成
+> 「替换整根导航栏」，**注定不显示** —— 升级到 1.3.0+ 才有侧边栏入口。
+> 重跑 `bash scripts/install-to-profile.sh` 并重启 DSH 即可。
 
 若启动时仍报
 `invalid plugin, expect function or object with an "apply" method, received undefined`，

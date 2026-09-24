@@ -92,7 +92,8 @@ make install NAME=lucky-api     # 或 make install-all
           ├── python3 更新 profile package.json（dependencies + dsh.profile.bundles）
           └── 备份原 package.json
                     ↓
-             重启 DSH → 面板出现在主界面侧边栏 + 「设置 → 插件」
+             重启 DSH → 面板入口出现在左侧栏 New Session 正下方
+             （席位 sidebar.panellist；本体在 main 槽，主界面工作区打开）
 ```
 
 > ⚠️ **`git pull` ≠ 已安装**。DSH 读的是 profile 里**复制过去的独立副本**（不是软链接），

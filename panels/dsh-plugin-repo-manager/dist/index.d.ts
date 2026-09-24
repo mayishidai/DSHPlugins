@@ -43,6 +43,32 @@ export declare function describeSkillsDir(skillsDir: string, source?: string): {
     warning: string | null;
 };
 /**
+ * 解析「是否显示侧边栏入口行」。
+ *
+ * 优先级：
+ *   `config.showSidebarEntry`（新键）
+ *   > `config.showSidebarButton`（**旧键，兼容保留**）
+ *   > `DSH_PLUGIN_SHOW_SIDEBAR_ENTRY`（新环境变量）
+ *   > `DSH_PLUGIN_SHOW_SIDEBAR`（旧环境变量，兼容保留）
+ *   > 默认 true
+ *
+ * 为什么要认旧键：入口从「设置 tab + 侧边栏按钮」迁到「侧边栏面板行 + 主界面工作区」
+ * 之后，旧键名 `showSidebarButton` 不再准确（它已经不是一个 button 了）。改名本身没风险，
+ * **唯一的风险是「用户照着旧文档改了旧键、毫无反应、也不报错」** —— 那正是本仓库
+ * 反复记录的一类静默失效。所以两个键都认，新键优先。
+ *
+ * 布尔解析刻意宽容：配置文件（YAML/JSON）与环境变量都只能给字符串，
+ * `"false"` / `"0"` / `"no"` / `"off"` 都必须识别为 false —— 若用
+ * `Boolean(raw)` 判断，字符串 `"false"` 是**真值**，会导致「在配置里关掉、
+ * 实际却仍然显示」这种最难排查的失效。
+ * 不认识的写法一律回退到默认值，避免拼错配置项把入口弄丢。
+ *
+ * ⚠️ 这是该判据**唯一的实现**。客户端 half 只消费这里归一化出来的布尔值，
+ * 不再自己解析字符串（否则就是「同一判据两处实现」，必然漂移）。
+ * `scripts/test-sidebar.mjs` 直接 `import` 构建产物来断言本函数，不重写一份。
+ */
+export declare function resolveShowSidebarEntry(ctx: any): boolean;
+/**
  * 从请求 URL 中取出「相对本插件前缀」的子路径，并归一化为 `/list` 这种形式。
  *
  * ## 为什么不能直接 `url.pathname === '/list'`
@@ -175,7 +201,7 @@ export declare function handleApiRequest(req: IncomingMessage, res: ServerRespon
     repoDir: string;
     skillsDir: string;
     pollInterval: number;
-    showSidebarButton: boolean;
+    showSidebarEntry: boolean;
     sidebarTitle: string;
     /** skillsDir 的来源（仅用于诊断展示；缺省时由 describeSkillsDir 反推） */
     skillsDirSource?: string;

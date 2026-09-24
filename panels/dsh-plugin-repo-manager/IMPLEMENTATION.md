@@ -8,12 +8,19 @@
 
 ## ✅ 已实现功能
 
-### 1. 主界面侧边栏图标按钮
-- 注册到 `sidebar` 槽位，渲染**自绘内联 SVG** 箱子图标（`currentColor`，跟随主题）
-- 点击后导航到设置面板的「我的插件仓库」
-- 由 `showSidebarButton` 控制（默认 `true`）；关闭时**整个不注册槽位**
-- ⚠️ 早期版本此处渲染的是中文字符串 `t('sidebar')`，在窄侧边栏里会溢出；
-  且 `showSidebarButton` 曾是**声明了但无人读取**的死配置（改了无效、也不报错）。
+### 1. 侧边栏入口（**2026-09-24 重做**）
+- 现注册到子槽 **`sidebar.panellist`**（入口行）＋ **`main`**（面板本体），两者同 id
+- 渲染**自绘内联 SVG** 箱子图标（`currentColor`，跟随主题与选中态）；文字由 ui-sidebar 渲染
+- 点击由 shell 调 `selectPanel(id)` 处理，插件不写 `onClick`
+- 由 `showSidebarEntry` 控制（默认 `true`）；关闭时**两个登记项都不注册**
+- ⚠️ 历史三部曲，都属「文件里有、类型对、编译过、不报错」：
+  1. 最早此处渲染中文字符串 `t('sidebar')`，在窄侧边栏里会溢出；
+  2. `showSidebarButton` 曾是**声明了但无人读取**的死配置（改了无效、也不报错）；
+  3. 更严重的：整版注册的是**整栏 `sidebar` 槽** —— `sidebar` 是 `single` 且已被
+     ui-sidebar 的 SidebarRoot 占用，ui-layout 的 `SlotMap` 注释原文是
+     "registering here replaces the navigation column outright rather than adding to it"，
+     所以它**注定不显示**。用户的现象正是「侧边栏里找不到，只在设置里找得到」。
+     同一个 bug 还配了 `icon: 'package'` 交给宿主渲染（宿主不认就静默空白）。
 
 ### 2. Skill 管理面板
 - 列出本地仓库中的所有 skill
@@ -29,7 +36,7 @@
 
 ### 4. 轮询刷新（可自定义）
 - 默认每 3 秒自动刷新
-- 可在设置面板中调整间隔（500ms - 无限）
+- 可在面板内的「设置」区调整间隔（500ms - 无限）
 - 手动刷新按钮
 - 显示最后更新时间
 
@@ -93,9 +100,7 @@ dsh --profile web &
 ```
 
 ### 3. 访问
-打开 `http://127.0.0.1:2298/` → 设置 → 插件 → 「我的插件仓库」
-
-或通过侧边栏按钮直接访问。
+打开 `http://127.0.0.1:2298/` → 点左侧栏 New Session 下方的 📦「插件仓库」行。
 
 ## 🔄 更新流程
 
@@ -115,7 +120,7 @@ cp -r . /vol2/@appdata/deepseek.harness/dsh-runtime/node_modules/@deepseek-ai/
 
 | 特性 | 官方方案 | dsh-market | 本插件 |
 |------|----------|------------|--------|
-| 侧边栏按钮 | ✅ | ✅ | ✅ |
+| 侧边栏入口 | ✅ | ✅ | ✅（全局面板行，主界面工作区打开） |
 | Skill 管理 | ✅ | ✅ | ✅ |
 | 实时更新 | ⭐⭐⭐ Typert | ⭐⭐ WebSocket | ⭐ 轮询 |
 | 安装复杂度 | 高（编译源码） | 中（npm install） | 低（复制） |

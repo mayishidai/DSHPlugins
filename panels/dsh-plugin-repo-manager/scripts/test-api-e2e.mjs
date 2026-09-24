@@ -61,7 +61,7 @@ const server = createServer((req, res) => {
     repoDir: REPO,
     skillsDir: SKILLS,
     pollInterval: 3000,
-    showSidebarButton: true,
+    showSidebarEntry: true,
     sidebarTitle: '插件仓库',
   })
 })
@@ -128,7 +128,7 @@ check('回显原始 pathname（排查路径约定）', typeof hJson?.route?.rawP
 check('回显归一化后的 sub', hJson?.route?.normalizedSub === '/_health')
 check('回显 repoDir 及其存在性', typeof hJson?.paths?.repoDir === 'string' && hJson?.paths?.repoExists === true)
 check('回显仓库条目数', hJson?.paths?.repoEntryCount === 2, String(hJson?.paths?.repoEntryCount))
-check('回显生效的配置（含 showSidebarButton）', hJson?.config?.showSidebarButton === true)
+check('回显生效的配置（含 showSidebarEntry）', hJson?.config?.showSidebarEntry === true)
 
 console.log('\n[6. 未知路径 → 结构化 404，而不是崩溃]')
 const nf = await get(PREFIX + '/nope')
@@ -167,7 +167,7 @@ const server2 = createServer((req, res) => {
     repoDir: REPO,
     skillsDir: WRONG_SKILLS,
     pollInterval: 3000,
-    showSidebarButton: true,
+    showSidebarEntry: true,
     sidebarTitle: '插件仓库',
   })
 })
