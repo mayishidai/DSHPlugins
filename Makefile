@@ -1,4 +1,4 @@
-.PHONY: build install install-all install-panel uninstall uninstall-panel list check verify test typecheck sync-skill sync-skill-dry update-panel list-profiles help
+.PHONY: build install install-all install-panel uninstall uninstall-panel list check verify test typecheck sync-skill sync-skill-dry update-panel list-profiles doctor-panel help
 
 # DSHPlugins 便捷命令。
 #
@@ -42,6 +42,9 @@ install-panel: build ## 安装面板插件到 DSH profile（会先编译）
 
 list-profiles: ## 只读：列出 profile 候选与各自检查结果（多机部署排查用）
 	bash scripts/lib/resolve-profile.sh --list
+
+doctor-panel: ## 只读：诊断面板插件在 DSH 侧能否加载（报 received undefined 时先跑这个）
+	bash scripts/install-to-profile.sh --check
 
 update-panel: ## 拉取最新并重装面板插件（git pull + install，等价于 install-panel 的「先更新」版）
 	bash scripts/update-and-install.sh
@@ -96,30 +99,33 @@ check: ## 校验仓库中所有插件（只读）
 		fi; \
 	done
 
-verify: ## 跑仓库侧全部校验（Python 校验 + Bash 自检 + 一致性回归 + 面板可加载性 + 宿主路径探测 + 镜像技能对齐 + 两类守卫的反向回归）
-	@echo "== 1/8 仓库结构校验（validate_repo.py）=="
+verify: ## 跑仓库侧全部校验（Python 校验 + Bash 自检 + 一致性回归 + 面板可加载性 + 宿主路径探测 + 镜像技能对齐 + 三类守卫的反向回归）
+	@echo "== 1/9 仓库结构校验（validate_repo.py）=="
 	@python3 scripts/validate_repo.py || exit 1
 	@echo ""
-	@echo "== 2/8 安装前自检（preflight.sh）=="
+	@echo "== 2/9 安装前自检（preflight.sh）=="
 	@bash scripts/preflight.sh || exit 1
 	@echo ""
-	@echo "== 3/8 凭据粗筛一致性回归（两套实现判定必须一致）=="
+	@echo "== 3/9 凭据粗筛一致性回归（两套实现判定必须一致）=="
 	@python3 scripts/tests/test_cred_parity.py || exit 1
 	@echo ""
-	@echo "== 4/8 面板可加载性（按包名真实解析 + 导出形态）=="
+	@echo "== 4/9 面板可加载性（按包名真实解析 + 导出形态）=="
 	@node scripts/tests/test-panel-resolve.mjs || exit 1
 	@echo ""
-	@echo "== 5/8 DSH profile 运行时探测（真实 lib + 假布局）=="
+	@echo "== 5/9 DSH profile 运行时探测（真实 lib + 假布局）=="
 	@bash scripts/tests/test-profile-resolve.sh || exit 1
 	@echo ""
-	@echo "== 6/8 镜像技能结构对齐（game-dev-workflow ↔ app-dev-workflow）=="
+	@echo "== 6/9 镜像技能结构对齐（game-dev-workflow ↔ app-dev-workflow）=="
 	@python3 scripts/tests/test-skill-parity.py || exit 1
 	@echo ""
-	@echo "== 7/8 镜像对齐守卫的反向回归（注入漂移，证其非空转）=="
+	@echo "== 7/9 镜像对齐守卫的反向回归（注入漂移，证其非空转）=="
 	@python3 scripts/tests/test-skill-parity-negatives.py || exit 1
 	@echo ""
-	@echo "== 8/8 宿主路径守卫的反向回归（注入漂移，证其非空转）=="
+	@echo "== 8/9 宿主路径守卫的反向回归（注入漂移，证其非空转）=="
 	@python3 scripts/tests/test-host-path-guard.py || exit 1
+	@echo ""
+	@echo "== 9/9 面板宿主诊断的反向回归（注入 12 种坏状态，证其非空转）=="
+	@python3 scripts/tests/test-doctor-panel.py || exit 1
 	@echo ""
 	@echo "✓ 全部校验通过"
 

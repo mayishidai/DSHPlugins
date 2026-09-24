@@ -58,7 +58,8 @@ bash scripts/update-and-install.sh
 | `bash scripts/update-and-install.sh --skills` | 顺便重装 `skills/` 下全部技能 |
 | `bash scripts/update-and-install.sh --no-pull` | 只重装，不拉取（本地已改好时用） |
 | `bash scripts/update-and-install.sh --list-profiles` | 只列出 profile 候选（排查「装到哪去了」） |
-| `make update-panel` / `make list-profiles` | 等价的 make 目标 |
+| `bash scripts/install-to-profile.sh --check` | **只读诊断**：装完能不能被 DSH 加载（等价 `make doctor-panel`） |
+| `make update-panel` / `make list-profiles` / `make doctor-panel` | 等价的 make 目标 |
 
 > 工作区**有未提交改动时会拒绝拉取并以 3 退出**（不静默 stash/覆盖），
 > 避免把你的本地修改冲掉。此时请先 commit/stash，或加 `--no-pull`。
@@ -117,7 +118,15 @@ New Session 之后。入口若不想显示，在 `cordis.patch.yml` 里设
 
 若启动时仍报
 `invalid plugin, expect function or object with an "apply" method, received undefined`，
-见 `docs/FAQ.md` 的 **Q4b**（三步排查）。
+**先跑只读诊断**（一句话就把五种同形根因区分开）：
+
+```bash
+make doctor-panel        # = bash scripts/install-to-profile.sh --check
+```
+
+每条 `[FAIL]` 后面都跟了对应修法。另外：安装脚本**在装完的最后一步会自动跑它**
+（「6. 宿主状态自检」），所以正常情况下你不会是「装完才发现装歪了」。
+人读版说明见 `docs/FAQ.md` 的 **Q4b**。
 
 ## 为什么只有一个安装脚本
 

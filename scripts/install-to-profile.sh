@@ -16,6 +16,7 @@ set -euo pipefail
 #   PROFILE_DIR=/path/to/profile bash scripts/...   # 显式指定 profile
 #   DSH_HOME=/path/to/dsh-data bash scripts/...     # 只给数据根，自己找 profiles/web
 #   DSH_PROFILE=web DSH_HOME=... bash scripts/...   # 数据根下有多个 profile 时指定名字
+#   bash scripts/install-to-profile.sh --check      # 只读诊断宿主状态，不写任何文件
 #   bash scripts/lib/resolve-profile.sh --list      # 只列出全部候选与检查结果
 #
 # ⚠️ profile 目录**运行时探测**，见下方「落点」一节。
@@ -88,6 +89,47 @@ echo ""
 if [ ! -d "$PLUGIN_SRC" ]; then
     echo "ERROR: 插件源目录不存在: $PLUGIN_SRC" >&2
     exit 1
+fi
+
+# ---------- 宿主状态诊断（只读） ----------
+#
+# DSH 启动报的那句话 ——
+#   invalid plugin, expect function or object with an "apply" method, received undefined
+# —— 是「至少五种根因共用同一句文本」的典型（解析不到包 / 落点被换成自指软链 /
+# 副本太旧 / 缺默认导出 / profile 没登记）。**看报错无法区分**，只能把判据逐条量出来。
+#
+# 判据实现放在 scripts/doctor-panel-plugin.py（纯 Python，好测），本脚本只负责
+# 把**已解析出的** profile / 面板源路径传进去 —— 落点公式仍然只有这一处。
+run_doctor() {
+    local py
+    py="$(command -v python3 || command -v python || true)"
+    if [ -z "$py" ]; then
+        echo "⚠ 找不到 python3，跳过诊断。" >&2
+        echo "  可手动执行：python3 $SCRIPT_DIR/doctor-panel-plugin.py --profile <profileDir>" >&2
+        return 0
+    fi
+    "$py" "$(to_native "$SCRIPT_DIR/doctor-panel-plugin.py")" \
+        --profile "$(to_native "$PROFILE_DIR")" \
+        --plugin-src "$(to_native "$PLUGIN_SRC")" \
+        --pkg-name "$PKG_NAME"
+}
+
+if [ "${1:-}" = "--check" ] || [ "${1:-}" = "--doctor" ]; then
+    echo "=== 只读诊断模式（不改动任何文件）==="
+    echo ""
+    # 多机 / 多 profile 场景：插件可能**也**装在别的 profile 里，而 DSH 加载的是
+    # 它自己启动时用的那一个。「在 A 上折腾、DSH 跑的是 B」= 「改了没效果」的常见来源，
+    # 所以先把它喊出来，而不是只诊断解析出来的这一个。
+    OTHERS_INSTALLED="$(dsh_profiles_where_installed "$PKG_NAME" | grep -vxF "$PROFILE_DIR" || true)"
+    if [ -n "$OTHERS_INSTALLED" ]; then
+        echo "⚠ 除上面这个 profile，另有 profile 也装了 $PKG_NAME：" >&2
+        printf '%s\n' "$OTHERS_INSTALLED" | sed 's/^/     /' >&2
+        echo "   → DSH 实际加载的是**它启动时用的那个** profile。若你改的是另一个，" >&2
+        echo "     症状就是「改了没效果」。用 PROFILE_DIR=<路径> 重跑本诊断。" >&2
+        echo "" >&2
+    fi
+    run_doctor
+    exit $?
 fi
 
 # 注意：PROFILE_DIR 由 resolve_dsh_profile_dir 保证「存在且含 package.json」；
@@ -187,12 +229,35 @@ echo ""
 echo "   cordis.patch.yml:"
 sed 's/^/     /' "$TARGET_DIR/cordis.patch.yml"
 
+# 6. 装完立刻自检
+#
+# 这一步才是本脚本最有价值的部分：DSH 那几个根因（落点不符 / 自指软链 / 副本太旧 /
+# 缺默认导出 / profile 没登记）**报错文本一字不差**，只在 DSH 启动时才炸 ——
+# 与其让人对着同一句话猜，不如在安装阶段就把判据逐条量出来。
+echo ""
+echo "6. 宿主状态自检..."
+echo ""
+if ! run_doctor; then
+    {
+        echo ""
+        echo "⚠⚠ 自检存在 [FAIL]：**现在重启 DSH 很可能仍报 received undefined**。"
+        echo "    先按上面每条 [FAIL] 给出的修法处理，再重跑本脚本。"
+        echo "    若全部 [OK] 却仍加载失败，请把上面整段输出贴出来。"
+        echo ""
+        echo "卸载: bash $SCRIPT_DIR/uninstall-from-profile.sh"
+    } >&2
+    exit 1
+fi
+
 echo ""
 echo "=== 安装完成 ==="
 echo ""
 echo "下一步："
 echo "  1. 重启 DSH"
-echo "  2. 访问 http://127.0.0.1:2298/ → 设置 → 插件 → 「我的插件仓库」"
+echo "  2. 打开 DSH Web —— 入口在**左侧栏、New Session 按钮正下方**那一行「插件仓库」"
+echo "     ⚠️ 不在「设置 → 插件」里：1.2.x 及以前在那里，v1.3.0 起已迁到侧边栏"
+echo "        （注册进的是 ui-sidebar 的 sidebar.panellist 席位；往整栏 sidebar 注册是"
+echo "         替换整根导航栏，注定不显示）"
 echo ""
 echo "卸载: bash $SCRIPT_DIR/uninstall-from-profile.sh"
 echo ""

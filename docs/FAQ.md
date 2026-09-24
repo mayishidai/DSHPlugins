@@ -67,35 +67,50 @@ DSH 只接受 kebab-case 技能名：`^[a-z0-9]+(?:-[a-z0-9]+)*$`。请改名，
 
 ## Q4b: 启动报 `invalid plugin, expect function or object with an "apply" method, received undefined`？
 
-**先别怀疑代码。** 这个报错的意思是「加载器拿到的值是 `undefined`」，
-最常见的原因是**模块根本没被解析出来**，而不是 `apply` 写错了。
+**先别怀疑代码。** 这句话的意思是「加载器拿到的值是 `undefined`」，而它**至少对应五种
+根因，报错文本一字不差**：
 
-排查顺序：
+① 包没落成 `node_modules/<包名>` ② 落点被换成解析不通的软链（自指 / 目标已删）
+③ 已装副本太旧 ④ 入口只有具名导出、没有默认导出 ⑤ profile 没登记
 
-1. **落点与包名不一致**（最常见）。包必须落在
-   `profile/node_modules/<package.json 的 name>`。如果装进了
-   `node_modules/@deepseek-ai/<name>/` 而配置里写的是不带作用域的名字，Node 就找不到它。
-   验证：
-   ```bash
-   ls -d <profile>/node_modules/<包名>
-   grep -n "name:" panels/*/cordis.patch.yml     # 应等于 package.json 的 name
-   ```
-   修法：重跑 `bash scripts/install-to-profile.sh`（会顺带清理历史错误落点）。
+**光看报错无法区分**（解析失败与导出缺失的文本完全一样），所以别猜 —— 先把判据量出来：
 
-2. **`node_modules` 被清空 / `npm install` 的链接失效**。
-   依赖声明是 `file:` 形式，若 `npm install` 没跑过或被清理，链接就没了。
-   重跑一次安装脚本即可（幂等）。
+```bash
+make doctor-panel     # 等价于 bash scripts/install-to-profile.sh --check，只读，不写任何文件
+```
 
-3. **入口没导出 `apply`**。检查 `dist/index.js`：
-   ```bash
-   grep -n "export" panels/dsh-plugin-repo-manager/dist/index.js
-   ```
+它逐条给出 `[OK]`/`[FAIL]`，每条 `[FAIL]` 后面都跟了对应修法。下面是人读版：
+
+1. **落点与包名不一致**（最常见）。包必须落在 `profile/node_modules/<package.json 的 name>`。
+   若装进 `node_modules/@deepseek-ai/<name>/` 而配置里写的是不带作用域的名字，Node 就找不到它。
+   ⚠️ 判据是「父目录**正好是** `node_modules`」—— 只比路径末段会漏报。
+   修法：`bash scripts/install-to-profile.sh`（会顺带清理历史错误落点）。
+
+2. **落点是软链接且解析不通**（自指 / 目标不存在）。软链**本身**不一定错（npm 的健康
+   `file:` 链接就是软链），错的是解析不到真目录 —— 那种情况下 Node 抛 ELOOP/ENOENT，
+   而 DSH 把这类失败一律报成 `received undefined`。
+   成因见下方 ⚠️ **不要跑 `npm install`**。
+
+3. **已装副本太旧**。`git pull` 只更新了仓库目录，DSH 读的是 profile 里那份**独立副本**
+   （复制过去的，不是软链）—— 症状是「改了没效果」。
+   修法：`bash scripts/update-and-install.sh`（= `git pull` + 重装）。
+
+4. **入口没导出 `apply`**。`grep -n "^export" panels/dsh-plugin-repo-manager/dist/index.js`
    应当能看到 `export async function apply` 与 `export default { name, apply }`。
-   本插件**同时提供具名导出与默认导出** —— 因为不同加载器实现有的取 `mod.apply`、
-   有的取 `mod.default`；只提供一种时，走另一条分支的加载器就会拿到 `undefined`。
+   本插件**同时提供具名导出与默认导出** —— 不同加载器实现有的取 `mod.apply`、
+   有的取 `mod.default`；只提供一种时，走另一条分支的加载器就拿到 `undefined`。
+
+5. **profile 没登记**。`package.json` 的 `dependencies` 与 `dsh.profile.bundles` 都得有包名。
+   重跑安装脚本即可补齐。
 
 > 判据：**只要报的是 "received undefined"，优先查「有没有解析到这个包」，
 > 而不是「包里的 apply 对不对」。** 解析失败与导出缺失的症状完全一样。
+
+> ⚠️ **不要在这个 profile 里跑 `npm install`。** profile 的 `dependencies` 里写的是
+> `"<包名>": "file:./node_modules/<包名>"` —— 指向它自己。npm 会把 `file:./node_modules/X`
+> 规范化成 `file:X` 再按 profile 根解析，于是必然失败（实测 `ENOENT`），中途还可能把
+> `node_modules/<包名>` 换成自指软链。**真目录是安装脚本直接铺好的，本来就不需要 npm 参与。**
+> 该 profile 的依赖管理请走 `install-to-profile.sh` / `uninstall-from-profile.sh`。
 
 ## Q5: 卸载会不会误删别的？
 `make uninstall NAME=<name>` 只删 `$DSH_HOME/skills/<name>/`，不影响其它插件。
@@ -103,8 +118,10 @@ DSH 只接受 kebab-case 技能名：`^[a-z0-9]+(?:-[a-z0-9]+)*$`。请改名，
 
 注意：**在仓库里删掉一个技能，不会自动从 DSH 里清掉它**。二选一：
 
-- **面板**（推荐）：设置 → 插件 → 「我的插件仓库」。那一条会以「仓库中已不存在」标出，
-  点「卸载」即可（也可勾选后批量卸载）。**只删 `$DSH_HOME/skills/<name>`，仓库不受影响。**
+- **面板**（推荐）：打开左侧栏「插件仓库」入口（位置在 **New Session 按钮正下方**；
+  1.2.x 及以前在「设置 → 插件」，v1.3.0 起已迁走）。列表里带「仓库中已不存在」
+  副标题的那一条，点「卸载」即可（也可勾选后批量卸载）。
+  **只删 `$DSH_HOME/skills/<name>`，仓库不受影响。**
 - **命令行**：`make uninstall NAME=<name>`。
 
 否则那份副本会一直留在 `$DSH_HOME/skills/` 里 —— 而且**技能照样生效**，
