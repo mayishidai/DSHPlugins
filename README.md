@@ -272,7 +272,10 @@ DSHPlugins/
 
 **更新流程**：读旧版本 → 判定安装/更新 → **整目录备份** `<name>.bak-<ISO时间戳>` → 清空旧目录（防残留）→ 递归复制（`statSync` 判目录，空目录也能复制）→ 写 `version.json`（保留 `installedAt`，刷新 `version`/`updatedAt`/`previousVersion`/`backupDir`）。
 
-> 面板插件自身的版本号写在 `panels/dsh-plugin-repo-manager/manifest.json`（当前 `1.1.0`），与 `package.json` 保持一致。
+> 面板插件自身的版本号写在 `panels/dsh-plugin-repo-manager/manifest.json`，且必须与同目录
+> `package.json` 的 `version` 保持一致（宿主/npm 读前者，面板的更新检测读后者）。
+> **此处刻意不写具体版本号** —— 曾经写成「当前 1.1.0」，之后连升两级无人发现；
+> 一致性由 `scripts/validate_repo.py` 的「版本号两处一致」检查兜住。
 
 
 ## ⚙️ 配置

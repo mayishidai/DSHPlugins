@@ -585,12 +585,14 @@ def check_panel(plugin: Path, name: str) -> None:
 
     # package.json 契约
     pkg_path = plugin / "package.json"
+    # 先置空，保证后面「版本号两处一致」那一节无论走哪个分支都有值可比 ——
+    # 缺文件时应当报 bad，不能因为 NameError 之类悄悄跳过。
+    pkg: dict = {}
     if pkg_path.is_file():
         try:
             pkg = json.loads(pkg_path.read_text(encoding="utf-8"))
         except Exception as e:
             bad(f"{name}: package.json 无法解析 ({e})")
-            pkg = {}
         main = pkg.get("main", "")
         if main.endswith(".ts"):
             bad(f"{name}: package.json main 指向 .ts（应为 dist/index.js）")
@@ -617,6 +619,7 @@ def check_panel(plugin: Path, name: str) -> None:
 
     # ---- manifest 的 entry 必须指向真实产物 ----
     mf_path = plugin / "manifest.json"
+    mf: dict = {}
     if mf_path.is_file():
         try:
             mf = json.loads(mf_path.read_text(encoding="utf-8"))
@@ -632,6 +635,26 @@ def check_panel(plugin: Path, name: str) -> None:
                 bad(f"{name}: manifest entry.server 指向不存在的文件（{srv}）")
             else:
                 ok(f"{name}: manifest entry.server = {srv}")
+
+    # ---- 版本号两处必须一致（2026-09-24 补） ----
+    # 面板自身版本号在 package.json 与 manifest.json 各写一份，两边都是事实来源：
+    # `package.json` 给 npm/宿主读，`manifest.json` 给面板自己的更新检测读
+    # （`isNewer(仓库版本, 已装 version.json 的版本)`）。不一致时**不报错**，
+    # 只表现为「更新提示时有时无」这类说不清的现象。
+    # 三处防线此前都不存在：这条守卫、以及 `README.md` 里那句人工复述
+    # 「与 package.json 保持一致」—— 它曾把版本写成 1.1.0，此后连升两级无人发现。
+    # → 所以文档不再复述版本号（同「文档里别复述校验步数」），改由这里直接比两份文件。
+    pkg_ver = pkg.get("version")
+    mf_ver = mf.get("version")
+    if pkg_ver and mf_ver:
+        if pkg_ver == mf_ver:
+            ok(f"{name}: package.json 与 manifest.json 版本一致（{pkg_ver}）")
+        else:
+            bad(f"{name}: 版本不一致 —— package.json={pkg_ver} / manifest.json={mf_ver}"
+                f"（两边必须同步：宿主/npm 读前者，面板更新检测读后者）")
+    else:
+        # 缺任一方时**不能静默通过** —— 那正是「空对空等于一致」的空转形态
+        bad(f"{name}: 版本号缺失 —— package.json={pkg_ver!r} / manifest.json={mf_ver!r}")
 
 
 def check_panel_names(plugin: Path, name: str) -> None:
