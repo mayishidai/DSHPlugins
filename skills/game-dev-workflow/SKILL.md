@@ -38,6 +38,7 @@ description: 游戏开发全流程团队协作系统（策划设计 → 程序�
 | 痕迹与代码分离但强关联 | 痕迹放项目根 `.gameflow/` 独立目录；分支名、提交信息、任务卡通过 WS-ID 全链路串联，一眼可见关联 |
 | 经验必须回流 | 复盘与 QA 产出的经验写入本 skill 的 `references/knowledge/`，下一个需求自动少踩坑 |
 | 先想清楚再动手 | 无受理记录不设计，无设计文档不拆单，无任务卡不写码，无验收标准不通过 |
+| 能并行就并行 | **平台自适应**：开工先探测平台多 agent 能力档位（A 团队 / B 子代理 / C 单 agent），按档位决定怎么派发；只要平台支持就一律多 agent 执行，主控不抢执行者的活（multi-agent.md §1 第 5 条、§2） |
 
 ---
 
@@ -59,7 +60,9 @@ description: 游戏开发全流程团队协作系统（策划设计 → 程序�
 
 - 禁止把"灵感"直接当设计开工 —— 灵感必须走 S0 受理与 S1 设计，否则验收标准无处谈起。
 - 禁止在 QA 阶段顺手接受设计变更 —— QA 期设计冻结；变更走决策记录（D-xx）或新 WS，否则回归范围失控。
-- 禁止两个并行任务修改同一文件 —— 派发前必须做 touches-files 互斥检查（multi-agent.md §4）。
+- 禁止**无保障地**并发修改同一文件 —— 派发前必须做 touches-files 互斥检查（multi-agent.md §5.1）；
+  确需多 agent 并发写同一文件时，必须套用四道防线（分区 / 只追加 / 写前重读 / 提交前 diff 自检，
+  multi-agent.md §5.2），缺一道就退回串行。
 - 禁止子 agent 修改 `INDEX.md`、任务板、他人任务卡 —— 全局索引与任务板由主控独占维护。
 - 禁止调优不留参数记录（前值 / 后值 / 理由 / 效果）—— 没有记录的调优下次只能重来。
 - 禁止把经验只写在对话或群聊里 —— 必须走 `lesson` / `retro` 指令落库。
@@ -102,16 +105,22 @@ description: 游戏开发全流程团队协作系统（策划设计 → 程序�
 
 ## 5. 角色与多 agent 一览
 
-| 角色 | 职责一句话 | 典型执行者 |
-|---|---|---|
-| 主控 Orchestrator | 唯一的全局视角：受理立项、维护索引与任务板、派发任务、把门禁、组织复盘 | 主 AI / 技术负责人 |
-| 策划 Designer | 把灵感变成完整设计文档：玩法、数值、边界、验收标准 | 策划 / AI 策划 agent |
-| 程序 Programmer | 拆单、实现任务卡、接入表现与调优 | 程序 / AI 程序 agent（可多路并行） |
-| 美术 Artist | UI 设计、动效与特效设计、素材清单与规范 | 美术 / AI 美术 agent（与 S2A 并行） |
-| QA Tester | 从设计文档推导用例、执行测试、登记与验证 BUG | QA / AI QA agent |
+| 角色 | 职责一句话 | 典型执行者 | 执行承载（按平台档位） |
+|---|---|---|---|
+| 主控 Orchestrator | 唯一的全局视角：受理立项、维护索引与任务板、派发任务、把门禁、组织复盘 | 主 AI / 技术负责人 | 主会话（A 档团队中通常 `main`） |
+| 策划 Designer | 把灵感变成完整设计文档：玩法、数值、边界、验收标准 | 策划 / AI 策划 agent | 执行者 `designer` |
+| 程序 Programmer | 拆单、实现任务卡、接入表现与调优 | 程序 / AI 程序 agent（可多路并行） | 执行者 `prog-t##` ×N（按波次） |
+| 美术 Artist | UI 设计、动效与特效设计、素材清单与规范 | 美术 / AI 美术 agent（与 S2A 并行） | 执行者 `artist`（与拆单并行） |
+| QA Tester | 从设计文档推导用例、执行测试、登记与验证 BUG | QA / AI QA agent | 执行者 `qa` |
 
-角色章程（职责、权限边界、交接契约、资深准则）见 `references/roles.md`；
-并行 / 串行编排、子 agent 提示词模板、冲突与失败处理见 `references/multi-agent.md`。
+角色章程（职责、权限边界、交接契约、资深准则）见 `references/roles.md`。
+
+**多 agent 默认规则（平台自适应）**：**能多 agent 执行的都多 agent 执行**——
+开工先按 `multi-agent.md` §2.2 探测当前平台的**能力档位**：A（团队模式）/ B（子代理）/ C（无派发能力）。
+A、B 档下，只读调研与写文件的角色任务（策划 / 美术 / 程序 / QA）一律**派发**执行，
+主控不抢执行者的活；**C 档**由主控顺序执行并留痕（不算违规）。
+仅四种情形允许退化单 agent（平台无能力 / WS 无可并行点 / 用户明确要求 / 任务强制串行），
+须 timeline 记录原因。档位映射、命名与权限约定、通信协议、派发模板见 `references/multi-agent.md`。
 
 ---
 
@@ -120,23 +129,26 @@ description: 游戏开发全流程团队协作系统（策划设计 → 程序�
 用户可以自然语言触发（"来个新需求""拆单""开始做 T03""跑一轮 QA""BUG-002 好了""复盘"），
 也可以显式调用 `/game-dev-workflow <指令> [参数]`。执行前必读对应 runbook。
 
-| 指令 | 干什么 | 典型触发语 | 详细 runbook | 可派发子 agent |
+| 指令 | 干什么 | 典型触发语 | 详细 runbook | 多 agent 执行（按平台档位） |
 |---|---|---|---|---|
-| `init` | 在游戏项目中初始化 .gameflow/ 痕迹目录 | "接入流程 / 初始化" | operations.md §1 | 否（主控） |
-| `intake` | 新需求受理立项，创建 WS | "新需求 / 立项 / 来了个灵感" | operations.md §2 | 否（主控） |
-| `design` | 策划：灵感 → 详细设计文档 | "出设计 / 写设计文档" | operations.md §3 | 可（策划 agent） |
-| `breakdown` | 程序：设计文档 → 任务拆单（含增量补卡） | "拆单 / 新增任务" | operations.md §4 | 否（主控） |
-| `art` | 美术：UI / 动效 / 特效设计 | "UI 设计 / 出美术稿" | operations.md §5 | 可（美术 agent） |
-| `implement` | 按任务卡实现（单卡或多卡并行） | "做 T03 / 开始开发" | operations.md §6 | 可（程序 agent ×N） |
-| `integrate` | 接入美术表现 + 调优并全程记录 | "接入 / 联调 / 调优" | operations.md §7 | 可（单程序 agent） |
-| `qa` | 测试计划、执行、报告 | "测一下 / 跑 QA" | operations.md §8 | 可（QA agent） |
-| `bug` | BUG 登记 → 定位 → 修复 → 验证 → 关闭 | "有个 bug / 修 BUG-002" | operations.md §9 | 可（修复卡） |
-| `retro` | 复盘：数据、三问、经验提取入库 | "复盘 / 总结一下" | operations.md §10 | 否（主控） |
-| `lesson` | 单独沉淀一条经验（不必等复盘） | "记条经验 / 这个坑记下来" | operations.md §11 | 否（主控） |
-| `status` | 查询进度 / 按任意 ID 检索痕迹 | "进度如何 / 查 WS-xxx" | operations.md §12 | 否（主控） |
+| `init` | 在游戏项目中初始化 .gameflow/ 痕迹目录 | "接入流程 / 初始化" | operations.md §1 | 否（主控独占） |
+| `intake` | 新需求受理立项，创建 WS | "新需求 / 立项 / 来了个灵感" | operations.md §2 | 否（主控独占） |
+| `design` | 策划：灵感 → 详细设计文档 | "出设计 / 写设计文档" | operations.md §3 | **是**：先派调研子任务做现状调研，再派发执行者 `designer` |
+| `breakdown` | 程序：设计文档 → 任务拆单（含增量补卡） | "拆单 / 新增任务" | operations.md §4 | 否（主控独占），与 `artist` 并行推进；必要时派调研摸底 |
+| `art` | 美术：UI / 动效 / 特效设计 | "UI 设计 / 出美术稿" | operations.md §5 | **是**：执行者 `artist`（与拆单同时启动） |
+| `implement` | 按任务卡实现（单卡或多卡并行） | "做 T03 / 开始开发" | operations.md §6 | **是**：执行者 `prog-t##` ×N，按 DAG 波次并行 |
+| `integrate` | 接入美术表现 + 调优并全程记录 | "接入 / 联调 / 调优" | operations.md §7 | **是**：单个执行者收口（串行） |
+| `qa` | 测试计划、执行、报告 | "测一下 / 跑 QA" | operations.md §8 | **是**：执行者 `qa`；修复卡另派 `prog-t##`（可并行） |
+| `bug` | BUG 登记 → 定位 → 修复 → 验证 → 关闭 | "有个 bug / 修 BUG-002" | operations.md §9 | **是**：修复卡派执行者（同 implement 波次规则） |
+| `retro` | 复盘：数据、三问、经验提取入库 | "复盘 / 总结一下" | operations.md §10 | 否（主控）；数据核对可派调研子任务 |
+| `lesson` | 单独沉淀一条经验（不必等复盘） | "记条经验 / 这个坑记下来" | operations.md §11 | 否（主控独占） |
+| `status` | 查询进度 / 按任意 ID 检索痕迹 | "进度如何 / 查 WS-xxx" | operations.md §12 | 否（主控）；大规模检索可派调研子任务 |
 
 **指令的组合即流程**：一次完整交付 = `intake → design → (breakdown ∥ art) → implement → integrate → qa → (bug 循环) → retro`，
 但每个指令都可以独立单独执行（比如只修一个 BUG、只补拆一张卡）。
+**平台自适应**：标"**是**"的环节按 multi-agent.md §2 探测到的**档位**派发执行——A 档派具名成员、
+B 档派一次性子代理；design 与 art 可并行时必须并行派发，implement 按 DAG 波次多路并行。
+**C 档（无派发能力）**由主控顺序执行并留痕，不算违规。
 执行任一指令前，先用 `status` 确认目标 WS 存在且处于合理状态（跨状态操作需在 timeline 说明理由）。
 
 ---
@@ -190,12 +202,20 @@ ID 体系、文件格式、timeline 条目格式、git 关联约定、检索配�
 
 ## 9. 参考文件索引
 
+> **路径约定**：下表路径均**相对于本 skill 的实际加载目录**（项目级
+> `<项目根>/.codebuddy/skills/game-dev-workflow/` 或用户级 `~/.codebuddy/skills/game-dev-workflow/`），
+> **不使用任何绝对路径**——因此本 skill 放在哪都能工作，迁移目录无需改内容。
+> **优先级**：同一项目内两份并存时以**项目级**为准（随仓库走、代表本项目版本），
+> 用户级仅作其他项目的兜底，两处须保持版本一致。
+> 实际生效者以**当前会话加载的 base directory** 为准；出现"改了不生效"时，
+> 优先怀疑加载的是另一份（版本可能更旧）。
+
 | 文件 | 内容 | 何时读 |
 |---|---|---|
 | `references/pipeline.md` | S0–S7 每阶段的目标、入口、步骤、产出、门禁、常见坑 | 进入任何新阶段前 |
 | `references/operations.md` | 12 个指令的完整 runbook（前置检查 / 步骤 / 产出 / 门禁 / 错误处理） | 执行任何指令前 |
 | `references/roles.md` | 5 个角色的章程与交接契约 | 承担角色前 |
-| `references/multi-agent.md` | 并行/串行编排、子 agent 提示词模板、冲突与失败处理 | 派发或作为子 agent 前 |
+| `references/multi-agent.md` | 平台自适应多 agent 执行（能力档位探测 / 档位映射 / 平台档案 / CodeBuddy 参考实现）、并行/串行编排、派发模板、并发写四道防线、冲突与失败处理 | 派发或作为执行者前 |
 | `references/trace-spec.md` | 痕迹目录规范、ID 体系、文件格式、检索配方 | 写任何痕迹文件前 |
 | `references/templates/` | 10 个文档模板（intake / 设计 / 任务板 / 任务卡 / 美术 / 接入 / QA / BUG / 复盘 / 决策） | 创建对应文档时 |
 | `references/knowledge/checklists.md` | G0–G7 门禁清单 | 过每个门禁前 |

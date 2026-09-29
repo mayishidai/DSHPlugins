@@ -8,17 +8,47 @@
 
 - **经验需要被团队直接编辑**：Skill 是纯 Markdown，策划 / 程序 / 美术都能直接改规范、补经验条目，走 git 版本管理；Agent 是封闭的运行时配置，不适合承载需要持续生长的团队知识。
 - **每一步需要可单独触发**：新立项、补拆一张卡、修一个 BUG、单独 QA，Skill 的指令路由天然支持按需调用；Agent 只能整体运行。
-- **多 agent 协作不受影响**：Skill 内置"多 agent 编排规范"（roles.md + multi-agent.md），主控 AI 按规范把策划 / 程序 / 美术 / QA 派发为并行子 agent——**skill 定义团队，agent 是它的运行时实例**。
+- **多 agent 协作不受影响**：Skill 内置"多 agent 编排规范"（roles.md + multi-agent.md），且**能多 agent 执行的都多 agent 执行**——只读调研派调研子任务，策划 / 程序 / 美术 / QA 默认派发出去并行执行；具体形态（团队模式 / 子代理 / 单 agent）由**运行时自动探测平台能力**决定（见 `references/multi-agent.md` §2）——**skill 定义团队，agent 是它的运行时实例**。
 
 ## 安装（让 AI 工具发现它）
 
 ```bash
-# 方式一：装到用户级（所有项目可用）—— WorkBuddy 用 ~/.workbuddy/skills/，DSH 用 $DSH_HOME/skills/
-mkdir -p ~/.workbuddy/skills && cp -r <仓库>/skills/game-dev-workflow ~/.workbuddy/skills/
+# 方式一：装到用户级（所有项目可用）—— CodeBuddy 用 ~/.codebuddy/skills/
+mkdir -p ~/.codebuddy/skills && cp -r <仓库>/skills/game-dev-workflow ~/.codebuddy/skills/
 
-# 方式二：装到某个游戏项目（仅该项目可用，推荐团队仓库统一放置）
-cd <你的游戏项目> && mkdir -p .workbuddy/skills && cp -r <仓库>/skills/game-dev-workflow .workbuddy/skills/
+# 方式二：装到某个游戏项目（仅该项目可用，推荐团队仓库统一放置，随项目走 git）
+cd <你的游戏项目> && mkdir -p .codebuddy/skills && cp -r <仓库>/skills/game-dev-workflow .codebuddy/skills/
 ```
+
+> **多平台**：本 skill **不绑定单一宿主**，会跑在 CodeBuddy、WorkBuddy、deepseekharness、
+> hermes、openclaw 等不同平台上。把上面命令里的 `.codebuddy` 换成你所在平台的技能目录即可：
+> CodeBuddy `~/.codebuddy/skills/`（或项目 `.codebuddy/skills/`）、WorkBuddy `~/.workbuddy/skills/`、
+> DSH `$DSH_HOME/skills/`，其余平台按各自文档放置。
+> **skill 内容无需任何改动**——内部不写死绝对路径，多 agent 能力由运行时**自动探测档位**
+> （团队模式 / 子代理 / 单 agent）并据此执行，见 `references/multi-agent.md` §2。
+
+## 安装位置与优先级（路径一律相对，不写死）
+
+本 skill **内部不写死任何绝对路径**：所有引用都用 `<skill>` 占位符或相对路径，
+因此放在用户级或项目级都能正常工作，迁移目录无需改任何内容。
+
+- **项目级**：`<项目根>/.codebuddy/skills/game-dev-workflow/`（随仓库版本走，团队一致）
+- **用户级**：`~/.codebuddy/skills/game-dev-workflow/`（所有项目可用，但需自行同步版本）
+
+**⚠️ 两处同时存在同名 skill 会有版本分裂风险**：不同项目可能加载到不同版本，
+改了 A 处却生效的是 B 处，排查成本极高。
+
+**优先级约定**：同一项目内两份并存时，**以项目级为准**（它随仓库走，代表本项目的版本），
+用户级仅作为"其他项目的兜底"。因此两处必须**保持版本一致**——升级任意一处后立即同步另一处，
+否则会出现"改了不生效"或"跨项目行为不一致"。
+
+建议二选一：
+
+- **团队统一 / 版本可控 → 只用项目级**（推荐，本仓库即采用此方式）；
+- **多项目共用 → 只用用户级**，并在每次升级后同步它。
+
+确认当前生效的是哪一份：看 AI 加载 skill 时给出的 **base directory**，
+或执行 `/game-dev-workflow status` 观察它读写哪份 `references/`。
 
 ## 在游戏项目里启用流程
 
